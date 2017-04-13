@@ -1,0 +1,2978 @@
+CREATE OR REPLACE PACKAGE BODY APPS.XXFIN_GBL_GROSS_MARGIN_C_PKG
+    IS
+       /*$Header: XXFIN_GBL_GROSS_MARGIN_C_PKG.pkb 1.34.1.11 2016/04/27 12:59:38IST SHREENIDHI Subba Rao (A63059) Exp  $*/
+       /*************************************************************************************************************************
+       * Oracle Applications : R12                                                                                              *
+       * I --> Initial                                                                                                          *
+       * E --> Enhancement                                                                                                      *
+       * R --> Requirement                                                                                                      *
+       * B --> Bug                                                                                                              *
+       **************************************************************************************************************************/
+      /**************************************************************************************************************************
+      * Type                        : Package Body                                                                              *
+      * Name                        : XXFIN_GBL_GROSS_MARGIN_C_PKG                                                              *
+      * Script Name                 : XXFIN_GBL_GROSS_MARGIN_C_PKG.pkb                                                          *
+      * Function                    :                                                                                           *
+      *                                                                                                                         *
+      * Procedure                   :                                                                                           *
+      *                                                                                                                         *
+      * Purpose                     : This package will prepare gross margin report by populating a global temporary table      *
+      *                               XXFIN_GBL_GROSS_MARGIN_C_GT . It will Display data for  revenue account and COGS accounts *
+      *                               for a given ledger and period name                                                        *
+      * Company                     : Arrow Electronics Ltd.                                                                    *
+      * Created By                  : ROHIT SHRIVASTAVA                                                                         *
+      * Created Date                : 24-JUN-2014                                                                               *
+      * Last Reviewed By            :                                                                                           *
+      * Last Reviewed Date          :                                                                                           *
+      ***************************************************************************************************************************
+      * <---------- Modified --------> <---- Version ----> <--------- Reviewed --------> <--------- Modification ---------->    *
+      * Date           By               Script   MKS        By                Date     Type Details                             *
+      * ----------- ---------------- -------- ---------- ----------------- ----------- ---- ----------------------------------- *
+      * 24-JUN-2014 Rohit Shrivastava    1.0     1.0                                    I    Created.                           *
+      * 26-OCT-2015 Sravanthi Aleti   2.0     2.0                                       M    Modified    QC# 104950             *
+      * 19-NOV-2015 Shreenidhi Subba Rao   1.1.1.24                                     M    Modified.   QC# 92625              *
+      * 09-DEC-2015 Shreenidhi Subba Rao   1.1.1.25                                     M    Modified.   QC# 106360             *
+      * 18-JAN-2016 Shreenidhi Subba Rao   1.34.1.3                                     M    Modified.   QC# 103357             *
+      ***************************************************************************************************************************/
+
+      -- --------------------------------------------------------------------- --
+      -- This variable holds the name of the package
+      -- --------------------------------------------------------------------- --
+      FUNCTION  get_claim_number(P_LINE_ID   IN NUMBER
+                                ,P_ITEM_ID   IN NUMBER) RETURN VARCHAR2
+        IS
+        /*******************************************************************************************************************
+        * Type                : Function                                                                                   *
+        * Name                : get_claim_number                                                                           *
+        * Input Parameters    : 1. Line_id                                                                                 *
+        *                       2. Item_id                                                                                 *
+        *                                                                                                                  *
+        * Output Parameters   : N/A                                                                                        *
+        *                                                                                                                  *
+        * Purpose             : This function will return claim number for a Utilization Id                                *
+        *                                                                                                                  *
+        * Created By          : Rohit Shrivastava                                                                          *
+        * Created Date        : 24-JUN-2014                                                                                *
+        * Last Reviewed By    :                                                                                            *
+        * Last Reviewed Date  :                                                                                            *
+        ********************************************************************************************************************
+        * <------- Modified ---------> <---- Version ----> <--------- Reviewed --------> <--------- Modification---------->*
+        * Date        By               Script   MKS        By                Date        Type Details                      *
+        * ----------- ---------------- -------- ---------- ----------------- ----------- ---- ---------------------------- *
+        * 24-JUN-2014  Rohit Shrivastava 0.0a     1.0                                      I      Created.                 *
+        *                                                                                                                  *
+        ********************************************************************************************************************/
+            -- --------------------------------------------------------------------- --
+            -- Varibale declaration
+            -- --------------------------------------------------------------------- --
+            l_claim_number                   VARCHAR2(30)    := NULL;
+            l_batch_id                       NUMBER          := NULL;
+            l_utilization_id                 NUMBER          := NULL;
+            CURSOR c_claim_number (p_line_id IN NUMBER
+                                  ,p_item_id IN NUMBER)
+                IS
+            SELECT  ch.claim_number         claim_number
+             FROM   ozf_claim_lines_all      ocl
+                   ,ozf_sd_batch_lines_all   bla
+                   ,ozf_sd_batch_headers_all bha
+                   ,ozf_claims_all           ch
+             WHERE ocl.claim_id         = ch.claim_id
+               AND bla.batch_line_id    = ocl.batch_line_id
+               AND bla.batch_id         = bha.batch_id
+               AND bha.claim_id         = ch.claim_id
+               AND bla.order_line_id    =  p_line_id
+               AND bla.item_id          = p_item_id;
+            CURSOR c_batch_id (P_LINE_ID IN NUMBER
+                              ,p_item_id IN NUMBER)
+                IS
+            SELECT batch_id
+              FROM ozf_sd_batch_lines_all
+             WHERE status_code      = 'APPROVED'
+               AND order_line_id  = P_LINE_ID
+               AND item_id        = P_ITEM_ID;
+            CURSOR c_batch_appr_id (P_LINE_ID IN NUMBER
+                                   ,p_item_id IN NUMBER)
+                IS
+            SELECT batch_id
+              FROM ozf_sd_batch_lines_all
+             WHERE order_line_id  = P_LINE_ID
+             AND item_id          = P_ITEM_ID
+             AND status_code      <> 'APPROVED'
+             AND rownum = 1;
+        BEGIN
+                  /*dbms_output.put_line('Begining of the Function Get_Claim_Number');
+                  FND_FILE.PUT_LINE(FND_FILE.log,'-------------------------------------------');
+                  -- --------------------------------------------------------------------- --*/
+                  OPEN c_claim_number(P_LINE_ID,P_ITEM_ID);
+                  FETCH c_claim_number into l_claim_number;
+                  CLOSE c_claim_number;
+                  IF l_claim_number is not null THEN
+                      RETURN (l_claim_number);
+                  ELSE
+                      OPEN c_batch_id(P_LINE_ID,P_ITEM_ID);
+                      FETCH c_batch_id INTO l_batch_id;
+                      CLOSE c_batch_id;
+                      IF l_batch_id IS NOT NULL THEN
+                          RETURN ('Batch ID '||l_batch_id);
+                      ELSE
+                          OPEN c_batch_appr_id(P_LINE_ID,P_ITEM_ID);
+                          FETCH c_batch_appr_id INTO l_batch_id;
+                          CLOSE c_batch_appr_id;
+                          IF l_batch_id IS NOT NULL THEN
+                              RETURN ('Batch ID '||l_batch_id);
+                          ELSE
+                              BEGIN
+                                  SELECT utilization_id
+                                  INTO l_utilization_id
+                                  FROM ozf_funds_utilized_all_b
+                                  WHERE order_line_id = P_LINE_ID;
+                               RETURN('Util ID: '||l_utilization_id);
+                              EXCEPTION
+                              WHEN NO_DATA_FOUND THEN
+                                  RETURN NULL;
+                              WHEN TOO_MANY_ROWS THEN
+                                 RETURN NULL;
+                              END;
+                          END IF;
+                      END IF;
+                  END IF;
+            EXCEPTION
+            WHEN OTHERS THEN
+                FND_FILE.PUT_LINE(FND_FILE.LOG,' No Claim / Batch Found');
+                RETURN NULL;
+            END get_claim_number;
+        FUNCTION  get_supplier_name(P_ORDER_NUMBER         IN NUMBER
+                                   ,P_LINE_NUMBER          IN NUMBER
+                                   ,P_ORG_ID               IN NUMBER) RETURN VARCHAR2
+          IS
+          /*******************************************************************************************************************
+          * Type                : Function                                                                                   *
+          * Name                : get_supplier_name                                                                          *
+          * Input Parameters    : 1. Sales Order Number                                                                      *
+          *                       2. Sales Order Line Number                                                                 *
+          *                       3. Org Id                                                                                  *
+          * Output Parameters   : N/A                                                                                        *
+          *                                                                                                                  *
+          * Purpose             : This function will return Supplier Name                                                    *
+          *                                                                                                                  *
+          * Created By          : Rohit Shrivastava                                                                          *
+          * Created Date        : 24-JUN-2014                                                                                *
+          * Last Reviewed By    :                                                                                            *
+          * Last Reviewed Date  :                                                                                            *
+          ********************************************************************************************************************
+          * <------- Modified ---------> <---- Version ----> <--------- Reviewed --------> <--------- Modification---------->*
+          * Date        By               Script   MKS        By                Date        Type Details                      *
+          * ----------- ---------------- -------- ---------- ----------------- ----------- ---- ---------------------------- *
+          * 24-JUN-2014 Rohit Shrivastava 0.0a     1.0                                      I      Created.                  *
+          ********************************************************************************************************************/
+              -- --------------------------------------------------------------------- --
+              -- Varibale declaration
+              -- --------------------------------------------------------------------- --
+              l_supplier_name                  VARCHAR2(360)    := NULL;
+              l_so_line_id                     NUMBER           := NULL;
+              l_item_id                        NUMBER           := NULL;
+              /*CURSOR c_supp_by_vndr_st (p_vendor_site_id IN NUMBER)
+                  IS
+              SELECT  aps.vendor_name
+               FROM   ap_suppliers          aps
+                     ,ap_supplier_sites_all apss
+               WHERE aps.vendor_id        = apss.vendor_id
+                 AND apss.vendor_site_id  = p_vendor_site_id;*/
+
+              CURSOR c_order_id(P_ORDER_NUMBER IN NUMBER
+                               ,P_LINE_NUMBER  IN NUMBER
+                               ,P_ORG_ID       IN NUMBER
+                               )
+                  IS
+                  SELECT ool.line_id              so_line_id
+                        ,ool.inventory_item_id    item_id
+                    FROM oe_order_lines_all   ool
+                        ,oe_order_headers_all ooh
+                   WHERE ool.org_id       = ooh.org_id
+                     AND ool.header_id    = ooh.header_id
+                     AND ool.org_id       = P_ORG_ID
+                     AND ooh.order_number = P_ORDER_NUMBER
+                     AND ool.line_number  = P_LINE_NUMBER;
+
+              CURSOR c_supp_by_line_id(P_LINE_ID IN NUMBER
+                                      ,P_ITEM_ID IN NUMBER)
+                  IS
+              SELECT aps.vendor_name
+                FROM wsh_delivery_details wdd
+                    ,mtl_lot_numbers mln
+                    ,po_lines_all pol
+                    ,po_headers_all poh
+                    ,ap_suppliers aps
+               WHERE source_line_id   = p_line_id
+                 AND wdd.lot_number   = mln.lot_number
+                 AND pol.po_line_id   = mln.n_attribute1
+                 AND poh.po_header_id = pol.po_header_id
+                 AND poh.vendor_id    = aps.vendor_id
+                 AND wdd.inventory_item_id = P_ITEM_ID
+                 AND rownum = 1;
+
+              CURSOR c_supp_by_batch_id (P_LINE_ID IN NUMBER
+                                        ,P_ITEM_ID IN NUMBER)
+                  IS
+              SELECT aps.vendor_name
+                FROM apps.ap_suppliers           aps
+                    ,ozf_sd_batch_headers_all    bha
+                    ,apps.ozf_sd_batch_lines_all bla
+              WHERE  bla.batch_id = bha.batch_id
+                AND bla.status_code = 'APPROVED'
+                AND bha.vendor_id   = aps.vendor_id
+                AND bla.order_line_id = P_LINE_ID
+                AND bla.item_id       = P_ITEM_ID
+                AND ROWNUM  = 1;
+
+              CURSOR c_supp_by_SQR_id (P_LINE_ID IN NUMBER
+                                        ,P_ITEM_ID IN NUMBER)
+                  IS
+              SELECT aps.vendor_name
+               FROM  ap_suppliers               aps
+                   , ap_supplier_sites_all      apss
+                   , oe_order_lines_all         ool
+                   , xxsls_gbl_sqr_headers_all  xgsqh
+                   , xxsls_gbl_sqr_lines_all    xgsql
+              WHERE  xgsqh.sqr_header_id  = xgsql.sqr_header_id
+                AND  xgsqh.supplier_site_id = apss.vendor_site_id
+                AND apss.vendor_id = aps.vendor_id
+                AND xgsql.sqr_line_id  = XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(ool.attribute13)
+                AND ool.line_id        = P_LINE_ID
+                AND xgsql.inventory_item_id = P_ITEM_ID
+                AND rownum = 1;
+            BEGIN
+                /*dbms_output.put_line('Begining of the Function Get_supplier_name');
+                FND_FILE.PUT_LINE(FND_FILE.log,'-------------------------------------------');
+                -- --------------------------------------------------------------------- --*/
+                IF (P_ORDER_NUMBER IS NULL) OR (P_LINE_NUMBER IS NULL) THEN
+                        RETURN NULL;
+                END IF;
+                OPEN c_order_id(P_ORDER_NUMBER,P_LINE_NUMBER,P_ORG_ID);
+                 FETCH c_order_id INTO l_so_line_id,l_item_id;
+                 CLOSE c_order_id;
+                  IF l_so_line_id IS NOT NULL AND l_item_id IS NOT NULL THEN
+                      OPEN c_supp_by_line_id(l_so_line_id,l_item_id);
+                     FETCH c_supp_by_line_id INTO l_supplier_name;
+                     CLOSE c_supp_by_line_id;
+                      IF l_supplier_name is not null THEN
+                          RETURN (l_supplier_name);
+                      END IF;
+                      OPEN c_supp_by_SQR_id(l_so_line_id,l_item_id);
+                      FETCH c_supp_by_SQR_id INTO l_supplier_name;
+                      CLOSE c_supp_by_SQR_id;
+                      IF l_supplier_name is not null THEN
+                          RETURN (l_supplier_name);
+                      END IF;
+                      OPEN c_supp_by_batch_id(l_so_line_id,l_item_id);
+                      FETCH c_supp_by_batch_id INTO l_supplier_name;
+                      CLOSE c_supp_by_batch_id;
+                      IF l_supplier_name is not null THEN
+                          RETURN (l_supplier_name);
+                      END IF;
+                  END IF;
+                  RETURN NULL;
+              EXCEPTION
+              WHEN OTHERS THEN
+                  dbms_output.put_line(' No Supplier Found');
+                  RETURN NULL;
+      END get_supplier_name;
+    FUNCTION  Get_Buy_Price_Basis(P_ORDER_NUMBER         IN NUMBER
+                                 ,P_LINE_NUMBER          IN NUMBER
+                                 ,P_ORG_ID               IN NUMBER) RETURN VARCHAR2
+      IS
+      /*******************************************************************************************************************
+      * Type                : Function                                                                                   *
+      * Name                : Get_Buy_Price_Basis                                                                        *
+      * Input Parameters    : 1. Order Number                                                                            *
+      *                       2. Order Line Number                                                                       *
+      *                       3. Org ID                                                                                  *
+      * Output Parameters   : N/A                                                                                        *
+      *                                                                                                                  *
+      * Purpose             : This function will buy price basis for an order line                                       *
+      *                                                                                                                  *
+      * Created By          : Rohit Shrivastava                                                                          *
+      * Created Date        : 24-JUN-2014                                                                                *
+      * Last Reviewed By    :                                                                                            *
+      * Last Reviewed Date  :                                                                                            *
+      ********************************************************************************************************************
+      * <------- Modified ---------> <---- Version ----> <--------- Reviewed --------> <--------- Modification---------->*
+      * Date        By               Script   MKS        By                Date        Type Details                      *
+      * ----------- ---------------- -------- ---------- ----------------- ----------- ---- ---------------------------- *
+      * 24-JUN-2014 Rohit Shrivastava 0.0a     1.0                                      I      Created.                  *
+      ********************************************************************************************************************/
+          -- --------------------------------------------------------------------- --
+          -- Varibale declaration
+          -- --------------------------------------------------------------------- --
+          l_buy_price_basis                  VARCHAR2(3)    := NULL;
+        -- --------------------------------------------------- --
+        -- Cursor to fetch BPB for VAS order                   --
+        -- --------------------------------------------------- --
+
+        CURSOR c_bpb_vas(P_ORDER_NUMBER IN NUMBER
+                        ,P_LINE_NUMBER  IN NUMBER
+                        ,P_ORG_ID       IN NUMBER)
+            IS
+        SELECT ool.attribute16
+         FROM oe_order_lines_all        ool
+             ,oe_order_headers_all      ooh
+             ,oe_transaction_types_all ottv
+        WHERE ool.header_id         = ooh.header_id
+          AND ool.org_id            = ooh.org_id
+          AND ooh.order_number      = P_ORDER_NUMBER
+          AND ool.line_number       = P_LINE_NUMBER
+          AND ooh.org_id            = P_ORG_ID
+          AND ottv.attribute3       = 'VAS'
+          AND ottv.transaction_type_id = ooh.order_type_id
+          AND ool.flow_status_code  <> 'CANCELLED'
+          AND ool.ITEM_TYPE_CODE    = 'MODEL';
+
+        -- --------------------------------------------------- --
+        -- Cursor to fetch BPB for NORMAL(Non VAS) order        --
+        -- --------------------------------------------------- --
+        CURSOR c_bpb_normal_so(P_ORDER_NUMBER IN NUMBER
+                              ,P_LINE_NUMBER  IN NUMBER
+                              ,P_ORG_ID       IN NUMBER)
+            IS
+        SELECT ool.attribute16
+          FROM oe_order_lines_all ool
+              ,oe_order_headers_all ooh
+         WHERE ool.header_id     = ooh.header_id
+           AND ool.org_id        = ooh.org_id
+           AND ooh.order_number  = P_ORDER_NUMBER
+           AND ool.line_number   = P_LINE_NUMBER
+           AND ool.flow_status_code <> 'CANCELLED'
+           AND ooh.org_id       = P_ORG_ID
+           AND rownum = 1;
+BEGIN
+        /*        FND_FILE.PUT_LINE(FND_FILE.log,'-------------------'Begining of the Function Get_Buy_Price_Basis'------------------------');*/
+
+          IF (P_ORDER_NUMBER IS NULL) OR (P_LINE_NUMBER IS NULL) OR (P_ORG_ID IS NULL) THEN
+            RETURN NULL;
+          END IF;
+
+          OPEN c_bpb_vas(P_ORDER_NUMBER,P_LINE_NUMBER,P_ORG_ID);
+          FETCH c_bpb_vas INTO l_buy_price_basis;
+          IF l_buy_price_basis IS NULL THEN
+            OPEN c_bpb_normal_so(P_ORDER_NUMBER,P_LINE_NUMBER,P_ORG_ID);
+            FETCH c_bpb_normal_so INTO l_buy_price_basis;
+            CLOSE c_bpb_normal_so;
+         END IF;
+         CLOSE c_bpb_vas;
+
+         RETURN l_buy_price_basis;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        FND_FILE.PUT_LINE(FND_FILE.LOG,' Unexpected error occured while fetching Buy Price Basis'||SQLERRM);
+        RETURN NULL;
+END Get_Buy_Price_Basis;
+
+    -- ------------------------------------------------------------------------------------ --
+    -- As per QC#106360, modified the function Get_Business_Cost to accept Line_id parameter --
+    -- Removed earlier parameters                                                          --
+    -- ------------------------------------------------------------------------------------ --
+  FUNCTION  Get_Business_cost( P_IN_LEDGER_ID   IN NUMBER
+                              ,P_IN_LINE_ID_STR IN CLOB) RETURN NUMBER
+       IS
+       /*******************************************************************************************************************
+       * Type                : Function                                                                                   *
+       * Name                : Get_Business_Cost                                                                          *
+       * Input Parameters    : 1. Line Id                                                                                 *
+       * Output Parameters   : N/A                                                                                        *
+       *                                                                                                                  *
+       * Purpose             : This function returns Business Cost in functional currency                                 *
+       *                                                                                                                  *
+       * Created By          : Rohit Shrivastava                                                                          *
+       * Created Date        : 24-JUN-2014                                                                                *
+       * Last Reviewed By    :                                                                                            *
+       * Last Reviewed Date  :                                                                                            *
+       ********************************************************************************************************************
+       * <------- Modified ---------> <---- Version ----> <--------- Reviewed --------> <--------- Modification---------->*
+       * Date        By               Script   MKS        By                Date        Type Details                      *
+       * ----------- ---------------- -------- ---------- ----------------- ----------- ---- ---------------------------- *
+       * 24-JUN-2014 Rohit Shrivastava 0.0a     1.0                                      I      Created.                  *
+       ********************************************************************************************************************/
+           -- --------------------------------------------------------------------- --
+           -- Varibale declaration
+           -- --------------------------------------------------------------------- --
+           l_business_cost                  NUMBER         := NULL;
+           l_total_business_cost            NUMBER         := NULL;
+
+         CURSOR c_normal_bc_standard( P_IN_LEDGER_ID NUMBER
+                                     ,P_SO_LINE_ID IN NUMBER)
+             IS
+         SELECT ROUND(ool.ordered_quantity*to_number(ool.attribute3)
+            *NVL(gl_currency_api.get_closest_rate_sql(P_IN_LEDGER_ID,ooh.transactional_curr_code,TRUNC(ool.actual_shipment_date),'Spot',300),1),2)
+         FROM oe_order_lines_all     ool
+           ,oe_order_headers_all     ooh
+         WHERE ool.flow_status_code = 'CLOSED'
+         AND ool.line_id            = P_SO_LINE_ID
+         AND ooh.header_id          = ool.header_id
+         AND ooh.org_id             = ool.org_id;
+
+         CURSOR c_normal_bc_custom( P_IN_LEDGER_ID NUMBER
+                                   ,P_SO_LINE_ID IN NUMBER)
+             IS
+         SELECT ROUND(ool.ordered_quantity*xgsd.cost_on_ref_so
+                *NVL(gl_currency_api.get_closest_rate_sql(P_IN_LEDGER_ID,xgsd.currency_code,TRUNC(ool.actual_shipment_date),'Spot',300),1),2)
+           FROM oe_order_lines_all       ool
+               ,oe_order_headers_all     ooh
+               ,xxcrm_gbl_so_det         xgsd
+          WHERE ool.line_id            = P_SO_LINE_ID
+            AND ooh.header_id          = ool.header_id
+            AND ooh.org_id             = ool.org_id
+            AND xgsd.order_header_id   = ool.header_id
+            AND ool.flow_status_code   = 'CLOSED'
+            AND xgsd.order_line_id     = ool.line_id;
+
+ CURSOR c_line_id(P_IN_LINE_ID_STR IN CLOB)
+ IS
+SELECT ool2.line_id
+   FROM oe_order_lines_all ool1
+       ,oe_order_lines_all ool2
+       ,oe_order_headers_all ooh
+       ,oe_transaction_types_all otta1
+       ,oe_transaction_types_all otta2
+  WHERE  ool1.header_id = ooh.header_id
+   AND  ool1.org_id = ooh.org_id
+   AND  ool1.line_type_id = otta1.transaction_type_id
+   AND ooh.order_type_id  = otta2.transaction_type_id
+   AND ool1.top_model_line_id = ool2.line_id
+   AND ool2.item_type_code   = 'MODEL'
+   AND ool2.flow_status_code = 'CLOSED'
+   AND NVL(otta1.attribute3,otta2.attribute3) = 'VAS'
+   AND ool1.line_id in ( SELECT DISTINCT trim(regexp_substr(dbms_lob.substr(P_IN_LINE_ID_STR,32000,1), '[^,]+', 1, LEVEL)) str
+                     FROM DUAL
+               CONNECT BY instr(dbms_lob.substr(P_IN_LINE_ID_STR,32000,1), ',', 1, LEVEL - 1) > 0)
+UNION
+ SELECT ool.line_id
+   FROM oe_order_lines_all ool
+       ,oe_order_headers_all ooh
+       ,oe_transaction_types_all otta1
+       ,oe_transaction_types_all otta2
+  WHERE  ool.header_id = ooh.header_id
+   AND  ool.org_id = ooh.org_id
+   AND  ool.line_type_id = otta1.transaction_type_id
+   AND ooh.order_type_id  = otta2.transaction_type_id
+   AND ool.flow_status_code = 'CLOSED'
+   AND NVL(otta1.attribute3,otta2.attribute3) != 'VAS'
+   AND ool.line_id in  ( SELECT DISTINCT trim(regexp_substr(dbms_lob.substr(P_IN_LINE_ID_STR,32000,1), '[^,]+', 1, LEVEL)) str
+                     FROM DUAL
+               CONNECT BY instr(dbms_lob.substr(P_IN_LINE_ID_STR,32000,1), ',', 1, LEVEL - 1) > 0);
+
+
+     BEGIN
+
+ l_total_business_cost := NULL;
+
+
+  FOR rec_line_id IN c_line_id(P_IN_LINE_ID_STR)
+ LOOP
+
+         l_business_cost := NULL;
+
+         OPEN c_normal_bc_standard(P_IN_LEDGER_ID,rec_line_id.line_id);
+         FETCH c_normal_bc_standard INTO l_business_cost;
+         IF l_business_cost IS NULL THEN
+             OPEN c_normal_bc_custom(P_IN_LEDGER_ID,rec_line_id.line_id);
+             FETCH c_normal_bc_custom INTO l_business_cost;
+             CLOSE c_normal_bc_custom;
+         END IF;
+         CLOSE c_normal_bc_standard;
+
+         l_total_business_cost := NVL(l_total_business_cost,0) + NVL(l_business_cost,0);
+
+ END LOOP;
+
+ RETURN l_total_business_cost;
+
+    EXCEPTION
+         WHEN OTHERS THEN
+             FND_FILE.PUT_LINE(FND_FILE.LOG,' No Business Cost Found, Unexpected Error occured: for line_id:'''||P_IN_LINE_ID_STR||''','||SQLERRM);
+            -- DBMS_OUTPUT.PUT_LINE('line_id :'||P_SO_LINE_ID);
+             RETURN NULL;
+   END Get_Business_Cost;
+
+      FUNCTION  Is_Number(P_STRING IN VARCHAR2) RETURN NUMBER
+      IS
+      /*******************************************************************************************************************
+      * Type                : Function                                                                                   *
+      * Name                : Is_Number                                                                                  *
+      * Input Parameters    : 1. String                                                                                  *
+      * Output Parameters   : N/A                                                                                        *
+      *                                                                                                                  *
+      * Purpose             : This function is used to convert string into number otherwise returns -999999              *
+      *                                                                                                                  *
+      * Created By          : Rohit Shrivastava                                                                          *
+      * Created Date        : 24-JUN-2014                                                                                *
+      * Last Reviewed By    :                                                                                            *
+      * Last Reviewed Date  :                                                                                            *
+      ********************************************************************************************************************
+      * <------- Modified ---------> <---- Version ----> <--------- Reviewed --------> <--------- Modification---------->*
+      * Date        By               Script   MKS        By                Date        Type Details                      *
+      * ----------- ---------------- -------- ---------- ----------------- ----------- ---- ---------------------------- *
+      * 24-JUN-2014 Rohit Shrivastava 0.0a     1.0                                      I      Created.                  *
+      ********************************************************************************************************************/
+          -- --------------------------------------------------------------------- --
+          -- Varibale declaration
+          -- --------------------------------------------------------------------- --
+          l_number                  NUMBER := NULL;
+
+          BEGIN
+
+          l_number := p_string;
+
+          IF l_number is null then
+
+            RETURN -99999;
+
+          ELSE
+
+            RETURN l_number;
+
+          END IF;
+
+          EXCEPTION
+            WHEN OTHERS THEN
+                RETURN -99999;
+
+          END Is_Number;
+
+    FUNCTION prior_period(P_IN_PERIOD_NAME IN VARCHAR2
+                          ,P_IN_SHIP_DATE   IN DATE) RETURN VARCHAR2
+      IS
+      /*******************************************************************************************************************
+      * Type                : Function                                                                                   *
+      * Name                : prior_period                                                                               *
+      * Input Parameters    : 1. Period Name                                                                             *
+      *                       2. shipment date                                                                           *
+      * Output Parameters   : N/A                                                                                        *
+      *                                                                                                                  *
+      * Purpose             : This function is used to identify the actual shipment date whether belong to current period*
+      *                       or previous period.
+      *                                                                                                                  *
+      * Created By          : Rohit Shrivastava                                                                          *
+      * Created Date        : 14-FEB-2012                                                                                *
+      * Last Reviewed By    :                                                                                            *
+      * Last Reviewed Date  :                                                                                            *
+      ********************************************************************************************************************
+      * <------- Modified ---------> <---- Version ----> <--------- Reviewed --------> <--------- Modification---------->*
+      * Date        By               Script   MKS        By                Date        Type Details                      *
+      * ----------- ---------------- -------- ---------- ----------------- ----------- ---- ---------------------------- *
+      * 24-JUN-2014 Rohit Shrivastava    0.0a     1.0                                      I      Created.               *
+      ********************************************************************************************************************/
+          -- --------------------------------------------------------------------- --
+          -- Varibale declaration
+          -- --------------------------------------------------------------------- --
+          l_period_start_date       DATE           := NULL;
+          l_yes                     VARCHAR2(3)    := 'YES';
+          l_no                     VARCHAR2(2)     := 'NO';
+          no_period_exp            EXCEPTION;
+
+          BEGIN
+
+
+            SELECT start_date
+              INTO l_period_start_date
+              FROM gl_periods where period_name = P_IN_PERIOD_NAME
+              AND period_set_name = 'ARW_GLOBAL';
+
+            IF l_period_start_date IS NULL THEN
+
+                RAISE no_period_exp;
+
+            ELSIF (P_IN_SHIP_DATE IS NULL) OR (trunc(P_IN_SHIP_DATE) >= l_period_start_date) THEN
+
+                RETURN l_no;
+
+            ELSE
+
+                RETURN l_yes;
+
+            END IF;
+
+
+          EXCEPTION
+
+            WHEN no_period_exp THEN
+
+                FND_FILE.PUT_LINE(FND_FILE.LOG,' No Data Found for prior_period');
+
+            WHEN OTHERS THEN
+
+                FND_FILE.PUT_LINE(FND_FILE.LOG,' Unexpected Error Occurer :'||SQLERRM);
+
+          END prior_period;
+
+       PROCEDURE  MAIN (  P_OUT_CHR_ERRBUF      OUT NOCOPY        VARCHAR2
+                         ,P_OUT_NUM_RETCODE     OUT NOCOPY        NUMBER
+                         ,P_IN_NUM_LEDGER_ID    IN                NUMBER
+                         ,P_IN_CHR_PERIOD_NAME  IN                VARCHAR2
+                         ,P_IN_CHR_COMPANY      IN                VARCHAR2
+                         ,P_DTE_GL_FRM          IN                VARCHAR2
+                         ,P_DTE_GL_TO           IN                VARCHAR2
+                         ,P_RPT_ONLY_57         IN                VARCHAR2
+                         ,P_CHR_EXTRACT         IN                VARCHAR2
+                      )
+            IS
+            /*******************************************************************************************************************
+            * Type                : procedure                                                                                  *
+            * Name                : MAIN                                                                                       *
+            * Input Parameters    : 1. Ledger Id                                                                               *
+            *                       2. Period Name                                                                             *
+            *                       3. From GL Date                                                                            *
+            *                       4. To GL Date                                                                              *
+            *                       5. Company                                                                                 *
+            *                       4. To GL Date                                                                              *
+            *                       5. Run for 57 Accounts only                                                                *
+            * Output Parameters   : retcode                                                                                    *
+            *                       errbuf                                                                                     *
+            *                                                                                                                  *
+            * Purpose             : This procedure generates out file for UNITY FGL0034C Gross Margin Report                   *
+            *                                                                                                                  *
+            * Created By          : Rohit Shrivastava                                                                          *
+            * Created Date        : 24-JUN-2014                                                                                *
+            * Last Reviewed By    :                                                                                            *
+            * Last Reviewed Date  :                                                                                            *
+            ********************************************************************************************************************
+            * <------- Modified ---------> <---- Version ----> <--------- Reviewed --------> <--------- Modification---------->*
+            * Date        By               Script   MKS        By                Date        Type Details                      *
+            * ----------- ---------------- -------- ---------- ----------------- ----------- ---- ---------------------------- *
+            * 24-JUN-2014 Rohit Shrivastava 0.0a     1.0                                      I      Created.                  *
+            ********************************************************************************************************************/
+                -- --------------------------------------------------------------------- --
+                -- Varibale declaration
+                -- --------------------------------------------------------------------- --
+                l_num_conc_request_id        NUMBER          := fnd_global.conc_request_id;
+                l_num_user_id                NUMBER          := fnd_global.user_id;
+                l_num_login_id               NUMBER          := fnd_global.login_id;
+                l_errbuf                     VARCHAR2(1000)  := NULL;
+                l_retcode                    NUMBER          := 0;
+                l_exp                        EXCEPTION;
+                l_sql1                        VARCHAR2(30000) := NULL;
+                l_sql2                        VARCHAR2(30000) := NULL;
+
+                l_chr_diff_amount       VARCHAR2(4000)  := NULL;
+                l_chr_report_amount     VARCHAR2(4000)  := NULL;
+                l_num_count             NUMBER          := 0;
+                l_num_mrg_bus_cost      NUMBER          := NULL;
+                l_trx_number            VARCHAR2(6000) := NULL;
+
+                l_chr_meaning           VARCHAR2(4000)  := NULL;
+                l_chr_description       VARCHAR2(4000)  := NULL;
+                l_chr_gl_amount         VARCHAR2(4000)  := 0;
+                l_ledger_name           VARCHAR2(100)   := NULL;
+
+                no_row_exp              EXCEPTION;
+                -- --------------------------------------------------------------------- --
+                -- Cursor to fetch accounts,description and GL balance                   --
+                -- --------------------------------------------------------------------- --
+                 CURSOR c_gl_total(P_IN_NUM_LEDGER_ID   IN NUMBER
+                                  ,P_IN_CHR_PERIOD_NAME  IN VARCHAR2
+                                  ,P_DTE_GL_FRM          IN VARCHAR2
+                                  ,P_DTE_GL_TO           IN VARCHAR2
+                                  ,P_IN_CHR_COMPANY      IN VARCHAR2
+                                 )
+                    IS
+                SELECT flv.meaning                                   MEANING
+                      ,flv.description                               DESCRIPTION
+                      ,gtt3.amount                                   REPORT_AMOUNT
+                      ,GL.AMOUNT                                     GL_AMOUNT
+                      ,gtt3.amount- GL.AMOUNT                        DIFF_AMOUNT
+                 FROM xxfin.xxfin_gbl_gross_margin_c_gt5               flv
+                     ,(SELECT account,sum(amount) amount
+                         FROM xxfin.xxfin_gbl_gross_margin_c_gt3
+                       GROUP BY account)                             GTT3
+                     ,(SELECT cc.segment4             account
+                            ,SUM(nvl(jl.accounted_cr,0)
+                            - nvl(jl.accounted_dr,0))  amount
+                         FROM gl_je_headers            jh
+                             ,gl_je_lines              jl
+                             ,gl_code_combinations     cc
+                        WHERE jh.je_header_id          = jl.je_header_id
+                          AND jh.period_name           = jl.period_name
+                          AND jh.ledger_id             = jl.ledger_id
+                          AND jh.status                = 'P'
+                          AND jh.ledger_id             = P_IN_NUM_LEDGER_ID
+                          AND jh.period_name           = P_IN_CHR_PERIOD_NAME
+                          AND jl.effective_date      BETWEEN fnd_date.canonical_to_date(P_DTE_GL_FRM) AND fnd_date.canonical_to_date(P_DTE_GL_TO)
+                          AND jl.code_combination_id   = cc.code_combination_id
+                          AND cc.segment4             IN (SELECT meaning FROM XXFIN_GBL_GROSS_MARGIN_C_GT5)
+                          AND cc.segment1              = P_IN_CHR_COMPANY
+                          AND nvl(jl.accounted_cr,0) <> nvl(jl.accounted_dr,0)
+                                GROUP BY segment4)                              GL
+            WHERE flv.meaning = gl.account(+)
+              AND flv.meaning = gtt3.account(+)
+            ORDER BY flv.meaning;
+    BEGIN
+                FND_FILE.PUT_LINE(FND_FILE.log,'Begining of the procedure MAIN');
+                FND_FILE.PUT_LINE(FND_FILE.log,'-------------------------------------------');
+                FND_FILE.PUT_LINE(FND_FILE.log, 'P_IN_NUM_LEDGER_ID is passed as   :'||P_IN_NUM_LEDGER_ID);
+                FND_FILE.PUT_LINE(FND_FILE.log, 'P_IN_CHR_PERIOD_NAME is passed as :'||P_IN_CHR_PERIOD_NAME);
+                FND_FILE.PUT_LINE(FND_FILE.log, 'P_DTE_GL_FRM is passed as         :'||P_DTE_GL_FRM);
+                FND_FILE.PUT_LINE(FND_FILE.log, 'P_DTE_GL_TO is passed as          :'||P_DTE_GL_TO);
+                FND_FILE.PUT_LINE(FND_FILE.log, 'P_IN_CHR_COMPANY is passed as     :'||P_IN_CHR_COMPANY);
+                FND_FILE.PUT_LINE(FND_FILE.log, 'P_RPT_ONLY_57 is passed as        :'||P_RPT_ONLY_57);
+                FND_FILE.PUT_LINE(FND_FILE.log, 'P_CHR_EXTRACT is passed as        :'||P_CHR_EXTRACT);
+                -- --------------------------------------------------------------------- --
+                P_OUT_CHR_ERRBUF                         := 'SUCCESS';
+                P_OUT_NUM_RETCODE                        := 0;
+
+    IF (P_RPT_ONLY_57 = 'N') THEN
+
+        INSERT INTO XXFIN_GBL_GROSS_MARGIN_C_GT5
+        SELECT meaning,description
+          FROM fnd_lookup_values
+         WHERE lookup_type IN ('XXFIN_GBL_GROSS_MARGIN_C_LKP')
+        ORDER BY XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(meaning);
+
+     ELSE
+        INSERT INTO XXFIN_GBL_GROSS_MARGIN_C_GT5
+        SELECT meaning,description
+          FROM fnd_lookup_values
+         WHERE lookup_type IN ('XXFIN_GBL_GROSS_MARGIN_C_LKP')
+         AND meaning like '57%'
+        ORDER BY XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(meaning);
+     END IF;
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT2, Insert 1 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    -- ------------------------------------------------------------------------------------------------- --
+    -- Block to insert GT2 for XLAJEL--> RA_CUST_TRX_LINE_GL_DIST_ALL even
+    -- ------------------------------------------------------------------------------------------------- --
+    BEGIN
+        COMMIT; --For clearing GT1
+        INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C_GT2
+        (order_number
+        ,line_id
+        ,validated_line_id
+        ,item_type
+        ,trx_number
+        ,gjh_doc_seq_value
+        ,gjc_category_name
+        ,gjs_source_name
+        ,gcc_segment4
+        ,gcc_segment2
+        ,amount
+        )
+        SELECT XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(rctl.interface_line_attribute1)      order_number
+              ,XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(rctl.interface_line_attribute6)          line_id
+            ,(select ool.line_id
+                FROM oe_order_lines_all     ool
+                    ,oe_order_headers_all   ooh
+               where ool.line_id =
+                    XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(rctl.interface_line_attribute6)
+                  and ool.header_id = ooh.header_id
+                  and ool.org_id    = ooh.org_id
+                  and ooh.order_number = XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(rctl.interface_line_attribute1))      validated_line_id
+              ,(select item_type
+                  FROM mtl_system_items_b
+                 where inventory_item_id
+                 = rctl.inventory_item_id and rownum =1)        item_type
+              ,rct.trx_number                                   trx_number
+              ,jh.doc_sequence_value                            gjh_doc_seq_value
+              ,jc.user_je_category_name                         gjc_category_name
+              ,js.user_je_source_name                           gjs_source_name
+              ,cc.segment4                                      gcc_segment4
+              ,cc.segment2                                      gcc_segment2
+              ,SUM(NVL(xdl.unrounded_accounted_cr, 0)
+                - NVL(xdl.unrounded_accounted_dr, 0))            amount
+         FROM apps.gl_je_headers                                    jh
+            ,apps.gl_je_lines                               jl
+            ,apps.gl_je_sources                             js
+            ,apps.gl_je_categories                          jc
+            ,apps.gl_code_combinations                      cc
+            ,apps.gl_import_references                      gir
+            ,apps.xla_ae_lines                              xal
+            ,apps.xla_distribution_links                    xdl
+            ,apps.xla_events                                xe
+            ,apps.xla_transaction_entities_upg              xte
+            ,apps.ra_customer_trx_lines_all                 rctl
+            ,apps.ra_customer_trx_all                       rct
+            ,ra_cust_trx_line_gl_dist_all                   rctlgd
+         WHERE jh.je_header_id                              = jl.je_header_id
+            AND jh.ledger_id                                 = jl.ledger_id
+            AND jl.period_name                               = jh.period_name
+            AND jh.status                                    = 'P'
+            AND jh.je_category                               = jc.je_category_name
+            AND jh.je_source                                 = js.je_source_name
+            AND jh.ledger_id                                 = P_IN_NUM_LEDGER_ID
+            AND jl.period_name                               = P_IN_CHR_PERIOD_NAME
+            AND jl.effective_date                            BETWEEN fnd_date.canonical_to_date(P_DTE_GL_FRM) AND fnd_date.canonical_to_date(P_DTE_GL_TO)
+            AND jl.code_combination_id                       = cc.code_combination_id
+            AND cc.segment4                                  IN (SELECT meaning FROM XXFIN_GBL_GROSS_MARGIN_C_GT5)
+            AND cc.segment1                                  = P_IN_CHR_COMPANY
+            AND jl.je_header_id                              = gir.je_header_id
+            AND jl.je_line_num                               = gir.je_line_num
+            AND gir.gl_sl_link_id                            = xal.gl_sl_link_id
+            AND gir.gl_sl_link_table                         = xal.gl_sl_link_table
+            AND xal.ae_header_id                                = xdl.ae_header_id
+            AND xal.application_id                              = xdl.application_id
+            AND xal.ae_line_num                                 = xdl.ae_line_num
+            AND gir.gl_sl_link_table                               = 'XLAJEL'
+            AND xdl.source_distribution_type                    = 'RA_CUST_TRX_LINE_GL_DIST_ALL'
+            AND xal.application_id                              = 222
+            AND xdl.event_id                                    = xe.event_id
+            AND xdl.application_id                              = xe.application_id
+            AND xe.entity_id                                    = xte.entity_id
+            AND xe.application_id                               = xte.application_id
+            AND xte.source_id_int_1                             = rctlgd.customer_trx_id
+            AND xdl.source_distribution_id_num_1                = rctlgd.cust_trx_line_gl_dist_id
+            AND rctlgd.gl_date                                  BETWEEN fnd_date.canonical_to_date(P_DTE_GL_FRM) AND fnd_date.canonical_to_date(P_DTE_GL_TO)
+            AND rctlgd.customer_trx_id                          = rctl.customer_trx_id
+            AND rctlgd.customer_trx_line_id                     = rctl.customer_trx_line_id
+            AND rctlgd.org_id                                   = rctl.org_id
+            AND rctl.customer_trx_id                            = rct.customer_trx_id
+            AND rctl.org_id                                     = rct.org_id
+            AND NVL(xdl.unrounded_accounted_cr, 0) <> NVL(xdl.unrounded_accounted_dr, 0)
+        GROUP BY rctl.interface_line_attribute1
+                ,rctl.interface_line_attribute6
+                ,rctl.inventory_item_id
+                ,rct.trx_number
+                ,jh.doc_sequence_value
+                ,jc.user_je_category_name
+                ,js.user_je_source_name
+                ,cc.segment4
+            ,cc.segment2;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+
+            FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found while inserting GT2, Insert 1');
+
+        WHEN OTHERS THEN
+            l_errbuf := 'Unexpected error occured while inserting GT2, Insert 1 :'||SQLERRM;
+            l_retcode := 2;
+            Raise l_exp;
+    END;
+    FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT2, Insert 1 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 1:1 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    -- ------------------------------------------------------------------------------------------------- --
+    -- Block to insert GT3 for XLAJEL--> RA_CUST_TRX_LINE_GL_DIST_ALL with SO details for Revenue FRT
+    -- ------------------------------------------------------------------------------------------------- --
+    BEGIN
+    INSERT INTO xxfin.xxfin_gbl_gross_margin_c_gt3
+    (terr_id
+    ,location
+     ,org_id
+     ,order_number
+     ,order_line_number
+     ,ship_accrual_date
+     ,account
+     ,so_line_id                -- Added as per QC#106360
+     ,amount)
+    (SELECT ooh.attribute1                   terr_id
+            ,gtt1.gcc_segment2               location
+            ,ool.org_id                      org_id
+            ,ooh.order_number                order_number
+            ,ool.line_number                 order_line_number
+            ,ool.actual_shipment_date        ship_accrual_date
+            ,gtt1.gcc_segment4               account
+            ,ool.line_id                                -- Added as per QC#106360
+            ,sum(amount)                     amount
+    FROM xxfin.xxfin_gbl_gross_margin_c_gt2 gtt1
+        ,oe_order_headers_all ooh
+        ,oe_order_lines_all   ool
+        ,oe_price_adjustments opa
+    WHERE ooh.header_id             = ool.header_id
+      AND ool.line_id               = opa.line_id
+      AND opa.price_adjustment_id   = gtt1.line_id
+      AND ooh.order_number          = gtt1.order_number
+      AND ool.org_id                = ooh.org_id
+      AND gtt1.item_type            = 'FRT'
+      AND gtt1.order_number         IS NOT NULL
+      GROUP BY ooh.attribute1,ool.org_id,ooh.order_number,ool.line_number,ool.actual_shipment_date,gtt1.gcc_segment4,gtt1.gcc_segment2,ool.line_id);   -- Added line_id as part of QC#106360
+EXCEPTION
+
+    WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found while inserting GT3, Insert 1:1');
+    WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 1:1 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+END;
+FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 1:1 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 1:2 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+-- ------------------------------------------------------------------------------------------------- --
+-- Block to insert GT3 for XLAJEL--> RA_CUST_TRX_LINE_GL_DIST_ALL with SO details for Revenue line items
+-- ------------------------------------------------------------------------------------------------- --
+BEGIN
+    INSERT INTO xxfin.xxfin_gbl_gross_margin_c_gt3
+    (terr_id
+    ,location
+     ,org_id
+     ,order_number
+     ,order_line_number
+     ,ship_accrual_date
+     ,account
+     ,so_line_id                -- Added as per QC#106360
+     ,amount)
+    (SELECT     ooh.attribute1                                 terr_id
+               ,gtt1.gcc_segment2                               location
+              ,ool.org_id                                       org_id
+              ,ooh.order_number                                 order_number
+              ,ool.line_number                                  order_line_number
+              ,ool.actual_shipment_date                         ship_accrual_date
+              ,gtt1.gcc_segment4                                account
+              ,ool.line_id                                -- Added as per QC#106360
+              ,sum(gtt1.amount)       amount
+    FROM xxfin.xxfin_gbl_gross_margin_c_gt2 gtt1
+        ,oe_order_headers_all ooh
+        ,oe_order_lines_all   ool
+    WHERE gtt1.validated_line_id    IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM DUAL where gtt1.item_type = 'FRT')
+      AND ool.line_id               = gtt1.line_id
+      AND gtt1.order_number         = ooh.order_number
+      AND ooh.header_id             = ool.header_id
+      AND ool.org_id                = ooh.org_id
+      GROUP BY ooh.attribute1,ool.org_id,ooh.order_number,ool.line_number,ool.actual_shipment_date,gtt1.gcc_segment4,gtt1.gcc_segment2,ool.line_id); -- Added as per QC# 106360
+EXCEPTION
+
+    WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found while inserting GT3, In Insert 1:2');
+    WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, In Insert 1:2 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+END;
+FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 1:2 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+IF P_CHR_EXTRACT = 'N' THEN
+
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 1:3 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    -- ------------------------------------------------------------------------------------------------- --
+    -- Block to insert GT3 for XLAJEL--> RA_CUST_TRX_LINE_GL_DIST_ALL with SO details for Revenue line items
+    -- ------------------------------------------------------------------------------------------------- --
+    BEGIN
+        INSERT INTO  xxfin.xxfin_gbl_gross_margin_c_gt3( transaction_reference
+                               ,location
+                               ,account
+                               ,amount)
+    SELECT gtt1.gjh_doc_seq_value ||'-'||
+           gtt1.gjs_source_name   ||'-'||
+           gtt1.gjc_category_name ||'- Cust Inv No:'||gtt1.trx_number transaction_reference
+           ,gtt1.gcc_segment2                                           location
+          ,gtt1.gcc_segment4                                            account
+          ,SUM(gtt1.amount)                   amount
+    FROM  xxfin.xxfin_gbl_gross_margin_c_gt2 gtt1
+    WHERE ((gtt1.validated_line_id    IS NULL AND NOT EXISTS (SELECT 1 FROM DUAL where gtt1.item_type = 'FRT'))
+         OR (NOT EXISTS (SELECT 1 from oe_price_adjustments where price_adjustment_id = gtt1.line_id)
+        AND gtt1.validated_line_id IS NULL AND gtt1.item_type = 'FRT'))
+      GROUP BY  gtt1.gjh_doc_seq_value
+           ,gtt1.gjs_source_name
+           ,gtt1.gjc_category_name
+           ,gtt1.trx_number
+           ,gtt1.gcc_segment4
+           ,gtt1.gcc_segment2;
+    EXCEPTION
+
+        WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found while inserting GT3, In Insert 1:3');
+        WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, In Insert 1:3 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+    END;
+    FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 1:3 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+END IF;
+
+FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT2, Insert 2 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+-- ------------------------------------------------------------------------------------------------- --
+-- Block to insert GT2 for XLAJEL--> MTL_TRANSACTION_ACCOUNTS                                        --
+-- ------------------------------------------------------------------------------------------------- --
+BEGIN
+    COMMIT; --To Delete previous data from GT2
+    INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C_GT2
+    (gjh_doc_seq_value
+    ,gjc_category_name
+    ,gjs_source_name
+    ,gcc_segment4
+    ,gcc_segment2
+    ,mmt_trx_id
+    ,mmt_organization_id
+    ,mmt_trx_src_line_id
+    ,mmt_trx_type_id
+    ,mmt_attribute15
+    ,amount
+    )
+    SELECT  jh.doc_sequence_value                            gjh_doc_seq_value
+          ,jc.user_je_category_name                         gjc_category_name
+          ,js.user_je_source_name                           gjs_source_name
+          ,cc.segment4                                      gcc_segment4
+          ,cc.segment2                                      gcc_segment2
+          ,mmt.transaction_id                               mmt_trx_id
+          ,mmt.organization_id                              mmt_organization_id
+          ,mmt.trx_source_line_id                           mmt_trx_src_line_id
+          ,mmt.transaction_type_id                          mmt_trx_type_id
+          ,mmt.attribute15                                  mmt_attribute15
+          ,SUM(NVL(translate(gir.reference_10,',','.'), 0) - NVL(translate(gir.reference_9,',','.'), 0))            amount
+ FROM apps.gl_je_headers                                    jh
+            ,apps.gl_je_lines                               jl
+            ,apps.gl_je_sources                             js
+            ,apps.gl_je_categories                          jc
+            ,apps.gl_code_combinations                      cc
+            ,apps.gl_import_references                      gir
+            ,apps.xla_ae_lines                              xal
+            ,apps.xla_distribution_links                    xdl
+            ,apps.xla_events                                xe
+            ,apps.xla_transaction_entities_upg              xte
+            ,apps.mtl_material_transactions                 mmt
+            ,apps.mtl_transaction_Accounts                  mta
+ WHERE jh.je_header_id                              = jl.je_header_id
+           AND jh.ledger_id                                 = jl.ledger_id
+           AND jl.period_name                               = jh.period_name
+           AND jh.status                                    = 'P'
+           AND jh.je_category                               = jc.je_category_name
+           AND jh.je_source                                 = js.je_source_name
+           AND jh.ledger_id                                 = P_IN_NUM_LEDGER_ID
+           AND jl.period_name                               = P_IN_CHR_PERIOD_NAME
+           AND jl.effective_date                            BETWEEN fnd_date.canonical_to_date(P_DTE_GL_FRM)AND fnd_date.canonical_to_date(P_DTE_GL_TO)
+           AND jl.code_combination_id                       = cc.code_combination_id
+           AND cc.segment4                                  IN (SELECT meaning FROM XXFIN_GBL_GROSS_MARGIN_C_GT5)
+           AND cc.segment1                                  = P_IN_CHR_COMPANY
+           AND jl.je_header_id                              = gir.je_header_id
+           AND jl.je_line_num                               = gir.je_line_num
+           AND gir.gl_sl_link_id                            = xal.gl_sl_link_id
+           AND gir.gl_sl_link_table                         = xal.gl_sl_link_table
+        AND xal.ae_header_id                                = xdl.ae_header_id
+        AND xal.application_id                              = xdl.application_id
+        AND xal.ae_line_num                                 = xdl.ae_line_num
+        AND gir.gl_sl_link_table                            = 'XLAJEL'
+        AND xdl.source_distribution_type                    = 'MTL_TRANSACTION_ACCOUNTS'
+        AND xal.application_id                              = 707
+        AND xdl.event_id                                    = xe.event_id
+        AND xdl.application_id                              = xe.application_id
+        AND xe.entity_id                                    = xte.entity_id
+        AND xe.application_id                               = xte.application_id
+        AND xte.source_id_int_1                             = mmt.transaction_id
+        AND mmt.transaction_id                              = mta.transaction_id
+        AND xdl.source_distribution_id_num_1                = mta.inv_sub_ledger_id
+        AND NVL(translate(gir.reference_10,',','.'), 0) <> NVL(translate(gir.reference_9,',','.'), 0)
+GROUP BY    jh.doc_sequence_value
+           ,jc.user_je_category_name
+           ,js.user_je_source_name
+           ,cc.segment4
+           ,cc.segment2
+           ,mmt.transaction_id
+           ,mmt.organization_id
+           ,mmt.trx_source_line_id
+           ,mmt.transaction_type_id
+           ,mmt.attribute15;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT2, Insert 2');
+    WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT2, Insert 2 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+END;
+FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT2, Insert 2 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 2:1 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+-- ------------------------------------------------------------------------------------------------- --
+-- Block to insert GT3 for XLAJEL--> MTL_TRANSACTION_ACCOUNTS-->RMA-->Return-->288                   --
+-- ------------------------------------------------------------------------------------------------- --
+BEGIN
+    INSERT INTO  xxfin.xxfin_gbl_gross_margin_c_gt3(terr_id
+                                                   ,location
+                                                   ,org_id
+                                                   ,order_number
+                                                   ,order_line_number
+                                                   ,ship_accrual_date
+                                                   ,transaction_reference
+                                                   ,account
+                                                   ,so_line_id                -- Added as per QC#106360
+                                                   ,amount)
+    (SELECT ooh.attribute1                                       TERR_ID
+          ,gtt1.gcc_segment2                                           LOCATION
+    ,ool.org_id                                                  ORG_ID
+    ,(SELECT order_number
+       FROM oe_order_headers_all
+      WHERE header_id = ooh.header_id)                           ORDER_NUMBER
+     ,ool.line_number                                            ORDER_LINE_NUMBER
+     ,ool.actual_shipment_date                                   SHIP_ACCRUAL_DATE
+     ,gtt1.gjh_doc_seq_value    ||'-'||
+     gtt1.gjs_source_name   ||'-'||
+     gtt1.gjc_category_name ||'-Org Code:'||
+      (select organization_code
+        from mtl_parameters
+       where organization_id = gtt1.mmt_organization_id)
+        ||' - Trx Id:'||gtt1.mmt_trx_id                         TRANSACTION_REFERENCE
+    ,gtt1.gcc_segment4                                          ACCOUNT
+    ,ool.line_id                                                             -- Added as per QC# 106360
+    ,SUM(gtt1.amount)                                           AMOUNT
+    FROM oe_order_headers_all                 ooh
+          ,oe_order_lines_all                   ool
+          ,oe_transaction_types_all             ott
+          ,xxdis_gbl_cst_receipts               xgcr
+          ,xxfin.xxfin_gbl_gross_margin_c_gt2     gtt1
+    WHERE ool.header_id                     = ooh.header_id
+      AND ool.org_id                        = ooh.org_id
+      AND xgcr.source_document_id           = ool.line_id
+      AND xgcr.inventory_item_id            = ool.inventory_item_id
+      AND ott.transaction_type_id           = ooh.order_type_id
+      AND ott.attribute3                    = 'RETURN'
+      AND xgcr.source                       = 'RMA RECEIPT'
+      AND ott.org_id                        = ooh.org_id
+      AND xgcr.transaction_id               IS NOT NULL
+      AND gtt1.mmt_trx_src_line_id          IS NULL
+      AND gtt1.mmt_trx_type_id              in ( 288,228)
+      AND xgcr.transaction_id               = XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(substr(gtt1.mmt_attribute15,instr(gtt1.mmt_attribute15,':',1,1)+1))
+      GROUP BY ooh.attribute1
+        ,ooh.header_id
+          ,ooh.order_number
+          ,ool.line_number
+          ,ool.line_id                    -- Added as part of QC# 106360
+          ,ool.actual_shipment_date
+          ,gtt1.mmt_trx_id
+          ,gtt1.mmt_organization_id
+          ,ool.org_id
+          ,gtt1.gjh_doc_seq_value
+          ,gtt1.gcc_segment4
+          ,gtt1.gcc_segment2
+          ,gtt1.gjc_category_name
+          ,gtt1.gjs_source_name);
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found while inserting GT3, Insert 2:1');
+    WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 2:1 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+END;
+FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 2:1 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 2:2 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+-- ------------------------------------------------------------------------------------------------- --
+-- Block to insert GT3 for XLAJEL--> MTL_TRANSACTION_ACCOUNTS-->SO, Insert 2:2                       --
+-- ------------------------------------------------------------------------------------------------- --
+BEGIN
+    INSERT INTO  xxfin.xxfin_gbl_gross_margin_c_gt3(terr_id
+                                                       ,location
+                                                       ,org_id
+                                                       ,order_number
+                                                       ,order_line_number
+                                                       ,ship_accrual_date
+                                                       ,account
+                                                       ,so_line_id                -- Added as per QC#106360
+                                                       ,amount)
+    (SELECT ooh.attribute1                                       TERR_ID
+        ,gtt1.gcc_segment2                                          LOCATION
+        ,ool.org_id                                                 ORG_ID
+        ,ooh.order_number                                           ORDER_NUMBER
+        ,ool.line_number                                            ORDER_LINE_NUMBER
+        ,ool.actual_shipment_date                                   SHIP_ACCRUAL_DATE
+        ,gtt1.gcc_segment4                                          ACCOUNT
+        ,ool.line_id                                               -- Added as per QC# 106360
+        ,gtt1.amount                                                AMOUNT
+    from xxfin.xxfin_gbl_gross_margin_c_gt2 gtt1
+        ,oe_order_headers_all             ooh
+        ,oe_order_lines_all               ool
+    where ool.line_id                       = gtt1.mmt_trx_src_line_id
+      AND ool.header_id                     = ooh.header_id
+      AND ool.org_id                        = ooh.org_id);
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found while inserting GT3, Insert 2:2');
+    WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 2:2 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+END;
+FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 2:2 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+IF P_CHR_EXTRACT = 'N' THEN
+    -- ------------------------------------------------------------------------------------------------- --
+    -- Block to insert GT3 for XLAJEL--> MTL_TRANSACTION_ACCOUNTS-->WithoutSO--Not in 288, Insert 2:3    --
+    -- ------------------------------------------------------------------------------------------------- --
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 2:3 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    BEGIN
+        INSERT INTO  xxfin.xxfin_gbl_gross_margin_c_gt3(transaction_reference
+                               ,location
+                               ,account
+                               ,amount)
+        (SELECT gtt1.gjh_doc_seq_value ||' - '||
+            gtt1.gjs_source_name   ||' - '||
+            gtt1.gjc_category_name ||' - Org Code:'||
+         (select organization_code
+            from mtl_parameters
+           where organization_id = gtt1.mmt_organization_id)
+            ||' - Trx Id:'||gtt1.mmt_trx_id                     TRANSACTION_REFERENCE
+        ,gtt1.gcc_segment2                                      LOCATION
+        ,gtt1.gcc_segment4                                      ACCOUNT
+        ,gtt1.amount                                            AMOUNT
+        FROM xxfin.xxfin_gbl_gross_margin_c_gt2                 gtt1
+        WHERE gtt1.mmt_trx_src_line_id            IS NULL
+          AND gtt1.mmt_trx_type_id               NOT IN (288,228));
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found while inserting GT3, Insert 2:3');
+        WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 2:3 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+    END;
+FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 2:3 on'||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+END IF;
+FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT2, Insert 3 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+-- ------------------------------------------------------------------------------------------------- --
+-- Block to insert GT2 for XLAJEL--> Not in RA_CUST_TRX_LINE_GL_DIST_ALL--> Not in MTL_TRANSACTION_ACCOUNTS--
+-- ------------------------------------------------------------------------------------------------- --
+BEGIN
+    COMMIT; --To Delete previous data from GT2
+    INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C_GT2
+    (gjl_reference_1
+    ,gjl_reference_2
+    ,gjl_reference_3
+    ,gjl_reference_4
+    ,gjl_reference_5
+    ,gjl_reference_6
+    ,gjl_reference_7
+    ,gjl_reference_8
+    ,gjl_description
+    ,amount
+    ,gjh_je_source
+    ,gjh_je_category
+    ,gjh_doc_seq_value
+    ,gjc_category_name
+    ,gjs_source_name
+    ,gcc_segment4
+    ,gcc_segment2
+    ,gir_gl_sl_link_table
+    ,xal_application_id
+    ,xal_accnt_cls_cd
+    ,xdl_event_type_code
+    ,xdl_src_dist_id_num_1
+    ,xdl_src_dist_type
+    ,xte_src_id_int_1
+    ,xte_src_id_int_2
+    )
+    SELECT gjl_reference_1
+    ,gjl_reference_2
+    ,gjl_reference_3
+    ,gjl_reference_4
+    ,gjl_reference_5
+    ,gjl_reference_6
+    ,gjl_reference_7
+    ,gjl_reference_8
+    ,gjl_description
+    ,amount
+    ,gjh_je_source
+    ,gjh_je_category
+    ,gjh_doc_seq_value
+    ,gjc_category_name
+    ,gjs_source_name
+    ,gcc_segment4
+    ,gcc_segment2
+    ,gir_gl_sl_link_table
+    ,xal_application_id
+    ,xal_accnt_cls_cd
+    ,xdl_event_type_code
+    ,xdl_src_dist_id_num_1
+    ,xdl_src_dist_type
+    ,xte_src_id_int_1
+    ,xte_src_id_int_2
+    FROM (SELECT jl.reference_1                                   gjl_reference_1
+                ,jl.reference_2                                   gjl_reference_2
+                ,jl.reference_3                                   gjl_reference_3
+                ,jl.reference_4                                   gjl_reference_4
+                ,jl.reference_5                                   gjl_reference_5
+                ,jl.reference_6                                   gjl_reference_6
+                ,jl.reference_7                                   gjl_reference_7
+                ,jl.reference_8                                   gjl_reference_8
+                ,jl.description                                   gjl_description
+           ,CASE WHEN xdl.source_distribution_type = 'AP_INV_DIST'
+                       OR xdl.source_distribution_type= 'AP_PMT_DIST'
+                       OR xdl.source_distribution_type = 'AR_DISTRIBUTIONS_ALL'
+                       OR xdl.source_distribution_type = 'CST_WRITE_OFFS'
+                       OR xdl.source_distribution_type = 'XLA_MANUAL'
+                       OR xdl.source_distribution_type = 'AP_PREPAY'
+                       OR xdl.source_distribution_type =  'RA_CUST_TRX_LINE_GL_DIST_ALL' THEN
+                          NVL(xdl.unrounded_accounted_cr, 0) - NVL(xdl.unrounded_accounted_dr, 0)
+            ELSE
+                    NVL(translate(gir.reference_10,',','.'), 0) - NVL(translate(gir.reference_9,',','.'), 0)
+            END                                         amount
+          ,jh.je_source                                 gjh_je_source
+          ,jh.je_category                               gjh_je_category
+          ,jh.doc_sequence_value                        gjh_doc_seq_value
+          ,jc.user_je_category_name                     gjc_category_name
+          ,js.user_je_source_name                       gjs_source_name
+          ,cc.segment4                                  gcc_segment4
+          ,cc.segment2                                  gcc_segment2
+          ,gir.gl_sl_link_table                         gir_gl_sl_link_table
+          ,xal.application_id                           xal_application_id
+          ,xal.accounting_class_code                    xal_accnt_cls_cd
+          ,xdl.event_type_code                          xdl_event_type_code
+          ,xdl.source_distribution_id_num_1              xdl_src_dist_id_num_1
+          ,xdl.source_distribution_type                  xdl_src_dist_type
+          ,xte.source_id_int_1                           xte_src_id_int_1
+          ,xte.source_id_int_2                           xte_src_id_int_2
+     FROM apps.gl_je_headers                            jh
+        ,apps.gl_je_lines                               jl
+        ,apps.gl_je_sources                             js
+        ,apps.gl_je_categories                          jc
+        ,apps.gl_code_combinations                      cc
+        ,apps.gl_import_references                      gir
+        ,apps.xla_ae_lines                              xal
+        ,apps.xla_distribution_links                    xdl
+        ,apps.xla_events                                xe
+        ,apps.xla_transaction_entities_upg              xte
+     WHERE jh.je_header_id                              = jl.je_header_id
+       AND jh.ledger_id                                 = jl.ledger_id
+       AND jl.period_name                               = jh.period_name
+       AND jh.status                                    = 'P'
+       AND jh.je_category                               = jc.je_category_name
+       AND jh.je_source                                 = js.je_source_name
+       AND jh.ledger_id                                 = P_IN_NUM_LEDGER_ID
+       AND jl.period_name                               = P_IN_CHR_PERIOD_NAME
+       AND jl.effective_date                            BETWEEN fnd_date.canonical_to_date(P_DTE_GL_FRM)AND fnd_date.canonical_to_date(P_DTE_GL_TO)
+       AND jl.code_combination_id                       = cc.code_combination_id
+       AND cc.segment4                                  IN (SELECT meaning FROM XXFIN_GBL_GROSS_MARGIN_C_GT5)
+       AND cc.segment1                                  = P_IN_CHR_COMPANY
+       AND jl.je_header_id                              = gir.je_header_id
+       AND jl.je_line_num                               = gir.je_line_num
+       AND gir.gl_sl_link_id                            = xal.gl_sl_link_id
+       AND gir.gl_sl_link_table                         = xal.gl_sl_link_table
+    AND xal.ae_header_id                                = xdl.ae_header_id
+    AND xal.application_id                              = xdl.application_id
+    AND xal.ae_line_num                                 = xdl.ae_line_num
+    AND xdl.event_id                                    = xe.event_id
+    AND xdl.application_id                              = xe.application_id
+    AND xe.entity_id                                    = xte.entity_id
+    AND xe.application_id                               = xte.application_id
+    AND xdl.source_distribution_type                    NOT IN ('RA_CUST_TRX_LINE_GL_DIST_ALL','MTL_TRANSACTION_ACCOUNTS')
+    AND gir.gl_sl_link_table                           =   'XLAJEL')
+    WHERE amount <> 0;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT2, Insert 3');
+    WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT2, Insert 3 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+END;
+FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT2, Insert 3 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 3:1 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+-- ------------------------------------------------------------------------------------------------- --
+-- Block to insert GT3 for XLAJEL--> ACCRUAL
+-- ------------------------------------------------------------------------------------------------- --
+BEGIN
+    INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C_GT3
+    (terr_id
+    ,location
+    ,org_id
+    ,order_number
+    ,order_line_number
+    ,ship_accrual_date
+    ,transaction_reference
+    ,account
+    ,so_line_id                                -- Added as per QC#106360
+    ,amount
+    )
+    SELECT ooh.attribute1                                       TERR_ID
+          ,gtt1.gcc_segment2                                        LOCATION
+          ,ool.org_id                                               ORG_ID
+             ,ooh.order_number                                      ORDER_NUMBER
+             ,ool.line_number                                       ORDER_LINE_NUMBER
+             ,ool.actual_shipment_date                              SHIP_ACCRUAL_DATE
+            ,gtt1.gjh_doc_seq_value ||'-'||
+             gtt1.gjs_source_name   ||'-'||
+             gtt1.gjc_category_name ||'-'||
+             xxfin_gbl_gross_margin_c_pkg
+               .get_claim_number(ofu.order_line_id
+             ,ool.inventory_item_id)                                TRANSACTION_REFERENCE
+             ,gtt1.gcc_segment4                                     ACCOUNT
+             ,ool.line_id                                                     -- Added as per QC#106360
+            ,sum(gtt1.amount)                                       AMOUNT
+         FROM xxfin.xxfin_gbl_gross_margin_c_gt2          gtt1
+             ,apps.ozf_funds_utilized_all_b             ofu
+             ,apps.oe_order_headers_all                 ooh
+             ,apps.oe_order_lines_all                   ool
+       WHERE gtt1.xdl_src_dist_id_num_1             =  ofu.utilization_id
+        AND gtt1.xdl_src_dist_type                  = 'ACCRUAL'
+        AND gtt1.xte_src_id_int_1                   = ofu.utilization_id
+        AND ofu.order_line_id                       = ool.line_id
+        AND ool.header_id                           = ooh.header_id
+        AND ool.org_id                              = ooh.org_id
+     GROUP BY ooh.attribute1,ool.org_id,gtt1.gcc_segment2,ooh.org_id,ooh.order_number,ool.line_number,ool.actual_shipment_date
+              ,gtt1.gjh_doc_seq_value,gtt1.gjs_source_name,gtt1.gjc_category_name,ofu.order_line_id,ool.inventory_item_id,gtt1.gcc_segment4,ool.line_id;   -- Added line_id as per QC# 106360
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT3, Insert 3:1');
+    WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 3:1 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+END;
+FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 3:1 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+IF P_CHR_EXTRACT = 'N' THEN
+
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 3:2 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    -- ------------------------------------------------------------------------------------------------- --
+    -- Block to insert GT3 for XLAJEL--> AP_INV_DIST
+    -- ------------------------------------------------------------------------------------------------- --
+    BEGIN
+       INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C_GT3
+               (supplier
+               ,location
+               ,transaction_reference
+               ,description
+               ,account
+               ,amount
+               )
+           SELECT aps.vendor_name                                  SUPPLIER
+              ,gtt1.gcc_segment2                               LOCATION
+              ,gtt1.gjh_doc_seq_value||'-'||
+               gtt1.gjs_source_name  ||'-'||
+               gtt1.gjc_category_name||'-'||
+               ai.invoice_num                                TRANSACTION_REFERENCE
+             ,NVL(ail.description,ai.description)            DESCRIPTION
+             ,gtt1.gcc_segment4                              ACCOUNT
+              ,SUM(gtt1.amount)                              AMOUNT
+              FROM xxfin.xxfin_gbl_gross_margin_c_gt2          gtt1
+              ,apps.ap_invoices_all                      ai
+              ,apps.ap_invoice_distributions_all         aid
+              ,apps.ap_invoice_lines_all                 ail
+              ,apps.ap_suppliers                         aps
+            WHERE gtt1.xdl_src_dist_id_num_1               = aid.invoice_distribution_id
+              AND aid.invoice_id                           = ai.invoice_id
+              AND aid.org_id                               = ai.org_id
+              AND aid.invoice_line_number                  = ail.line_number
+              AND ail.invoice_id                           = ai.invoice_id
+              AND ail.org_id                               = ai.org_id
+              AND aps.vendor_id                            = ai.vendor_id
+              AND gtt1.xdl_src_dist_type                   = 'AP_INV_DIST'
+              AND gtt1.xte_src_id_int_1                    = ai.invoice_id
+              GROUP BY aps.vendor_name
+                   ,gtt1.gcc_segment2
+                   ,gtt1.gcc_segment4
+                   ,gtt1.gjh_doc_seq_value
+                   ,gtt1.gjs_source_name
+                   ,gtt1.gjc_category_name
+                   ,ai.invoice_num
+                ,NVL(ail.description,ai.description);
+
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT3, Insert 3:2');
+        WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 3:2 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+    END;
+    FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 3:2 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 3:3 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    -- ------------------------------------------------------------------------------------------------- --
+    -- Block to insert GT3 for XLAJEL--> RCV_RECEIVING_SUB_LEDGER
+    -- ------------------------------------------------------------------------------------------------- --
+    BEGIN
+      INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C_GT3
+              (supplier
+              ,location
+              ,transaction_reference
+              ,account
+              ,amount
+              )
+          SELECT aps.vendor_name                              SUPPLIER
+            ,gtt1.gcc_segment2                            LOCATION
+            ,gtt1.gjh_doc_seq_value||' - '||
+             gtt1.gjs_source_name  ||' - '||
+             gtt1.gjc_category_name||' - PO#:'||
+             ph.segment1||' - Rcv Trx Id:'||
+             rrsl.rcv_transaction_id                      TRANSACTION_REFERENCE
+            ,gtt1.gcc_segment4                            ACCOUNT
+            ,SUM(gtt1.amount)                             AMOUNT
+         FROM apps.rcv_receiving_sub_ledger             rrsl
+             ,apps.po_headers_all                       ph
+             ,apps.ap_suppliers                         aps
+             ,xxfin.xxfin_gbl_gross_margin_c_gt2           gtt1
+        WHERE gtt1.xdl_src_dist_id_num_1           = rrsl.rcv_sub_ledger_id
+          AND gtt1.xdl_src_dist_type               = 'RCV_RECEIVING_SUB_LEDGER'
+          AND gtt1.xte_src_id_int_1                = rrsl.rcv_transaction_id
+          AND gtt1.xte_src_id_int_2                = rrsl.accounting_event_id
+          AND rrsl.reference1                      = 'PO'
+          AND rrsl.reference2                      = ph.po_header_id
+          AND ph.vendor_id                         = aps.vendor_id
+          GROUP BY  aps.vendor_name
+               ,gtt1.gcc_segment2
+               ,gtt1.gjh_doc_seq_value
+               ,gtt1.gjs_source_name
+               ,gtt1.gjc_category_name
+               ,ph.segment1
+               ,rrsl.rcv_transaction_id
+             ,gtt1.gcc_segment4;
+
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT3, Insert 3:3');
+        WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 3:3 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+    END;
+    FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 3:3 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 3:4 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    -- ------------------------------------------------------------------------------------------------- --
+    -- Block to insert GT3 for XLAJEL--> AP_PMT_DIST, COGS Query for Payables Payments
+    -- ------------------------------------------------------------------------------------------------- --
+    BEGIN
+    INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C_GT3
+            (supplier
+            ,location
+            ,transaction_reference
+            ,description
+            ,account
+            ,amount
+            )
+     SELECT  aps.vendor_name                                        SUPPLIER
+           ,gtt1.gcc_segment2                                   LOCATION
+           ,gtt1.gjh_doc_seq_value ||'-'||
+            gtt1.gjs_source_name   ||'-'||
+            gtt1.gjc_category_name ||'-'||
+            ai.invoice_num                                      TRANSACTION_REFERENCE
+           ,ai.description                                      DESCRIPTION
+           ,gtt1.gcc_segment4                                   ACCOUNT
+           ,SUM(gtt1.amount)                                    AMOUNT
+           FROM apps.ap_invoices_all                            ai
+               ,apps.ap_payment_hist_dists                      apd
+               ,apps.ap_invoice_payments_all                    aip
+               ,ap_suppliers                                    aps
+               ,xxfin.xxfin_gbl_gross_margin_c_gt2           gtt1
+         WHERE gtt1.xdl_src_dist_type                     = 'AP_PMT_DIST'
+           AND gtt1.xdl_src_dist_id_num_1                 = apd.payment_hist_dist_id
+           AND gtt1.xte_src_id_int_1                      = aip.check_id
+           AND apd.invoice_payment_id                     = aip.invoice_payment_id
+           AND aip.invoice_id                             = ai.invoice_id
+           AND aip.org_id                                 = ai.org_id
+           AND aps.vendor_id                              = ai.vendor_id
+           GROUP BY aps.vendor_name
+               ,gtt1.gcc_segment2
+               ,gtt1.gcc_segment4
+               ,gtt1.gjh_doc_seq_value
+               ,gtt1.gjs_source_name
+               ,gtt1.gjc_category_name
+               ,ai.invoice_num
+               ,ai.description;
+
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT3, Insert 3:4');
+        WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 3:4 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+    END;
+    FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 3:4 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 3:5 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    -- ------------------------------------------------------------------------------------------------- --
+    -- Block to insert GT3 for XLAJEL--> AR_DISTRIBUTIONS_ALL, COGS Query for Receivables/Receipts
+    -- ------------------------------------------------------------------------------------------------- --
+    BEGIN
+    INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C_GT3
+            (location
+            ,transaction_reference
+            ,account
+            ,amount
+            )
+     SELECT  gtt1.gcc_segment2                   LOCATION
+        ,gtt1.gjh_doc_seq_value ||'-'||
+         gtt1.gjs_source_name   ||'-'||
+         gtt1.gjc_category_name ||'-'||
+         acr.receipt_number                  TRANSACTION_REFERENCE
+        ,gtt1.gcc_segment4                   ACCOUNT
+        ,SUM(gtt1.amount)                    AMOUNT
+        FROM xxfin.xxfin_gbl_gross_margin_c_gt2    gtt1
+        ,ar_cash_receipts_all                acr
+     WHERE gtt1.xdl_src_dist_type                = 'AR_DISTRIBUTIONS_ALL'
+       AND gtt1.xte_src_id_int_1                 = acr.cash_receipt_id(+)
+       GROUP BY gtt1.gcc_segment2
+           ,gtt1.gjh_doc_seq_value
+           ,gtt1.gjs_source_name
+           ,gtt1.gjc_category_name
+           ,acr.receipt_number
+           ,gtt1.gcc_segment4;
+
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT3, Insert 3:5');
+        WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 3:5 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+    END;
+    FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 3:5 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 3:6 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    -- ------------------------------------------------------------------------------------------------- --
+    -- Block to insert GT3 for XLAJEL--> CST_WRITE_OFFS, COGS Query for Receivables/Offset
+    -- ------------------------------------------------------------------------------------------------- --
+    BEGIN
+    INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C_GT3
+            (supplier
+            ,location
+            ,transaction_reference
+            ,account
+            ,amount
+            )
+        SELECT  aps.vendor_name                                     SUPPLIER
+            ,gtt1.gcc_segment2                                  LOCATION
+            ,gtt1.gjh_doc_seq_value||'-'||
+             gtt1.gjs_source_name  ||'-'||
+             gtt1.gjc_category_name||
+            '- PO No: '            ||ph.segment1                TRANSACTION_REFERENCE
+               ,gtt1.gcc_segment4                                   ACCOUNT
+               ,SUM(gtt1.amount)                                    AMOUNT
+               FROM apps.cst_write_offs                               cwo
+               ,apps.ap_suppliers                                 aps
+               ,apps.po_headers_all                               ph
+               ,apps.po_distributions_all                         pda
+               ,xxfin.xxfin_gbl_gross_margin_c_gt2                  gtt1
+             WHERE gtt1.xdl_src_dist_type                   = 'CST_WRITE_OFFS'
+               AND gtt1.xdl_src_dist_id_num_1               = cwo.write_off_id
+               AND gtt1.xte_src_id_int_1                    = cwo.write_off_id
+               AND pda.po_distribution_id(+)                = cwo.po_distribution_id
+               AND ph.po_header_id(+)                       = pda.po_header_id
+               AND ph.vendor_id                             = aps.vendor_id(+)
+               GROUP BY gtt1.gjh_doc_seq_value
+                   ,gtt1.gjs_source_name
+                   ,gtt1.gjc_category_name
+                   ,gtt1.gcc_segment4
+                   ,gtt1.gcc_segment2
+                   ,aps.vendor_name
+                   ,ph.segment1;
+
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT3, Insert 3:6');
+        WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 3:6 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+    END;
+    FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 3:6 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 3:7 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    -- ------------------------------------------------------------------------------------------------- --
+    -- Block to insert GT3 for XLAJEL--> XLA_MANUAL, COGS Query for Manual Subledger entries
+    -- ------------------------------------------------------------------------------------------------- --
+    BEGIN
+     INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C_GT3
+            (location
+            ,transaction_reference
+            ,account
+            ,amount
+            )
+       SELECT gtt1.gcc_segment2                   LOCATION
+           ,gtt1.gjh_doc_seq_value||'-'||
+            gtt1.gjs_source_name  ||'-'||
+            gtt1.gjc_category_name||'-'||
+            gtt1.xal_accnt_cls_cd ||'-'||
+            gtt1.xdl_event_type_code           TRANSACTION_REFERENCE
+           ,gtt1.gcc_segment4                  ACCOUNT
+           ,SUM(gtt1.amount)                   AMOUNT
+          FROM xxfin.xxfin_gbl_gross_margin_c_gt2    gtt1
+         WHERE gtt1.xdl_src_dist_type         = 'XLA_MANUAL'
+          GROUP BY  gtt1.gcc_segment2
+               ,gtt1.gjh_doc_seq_value
+               ,gtt1.gjs_source_name
+               ,gtt1.gjc_category_name
+               ,gtt1.xal_accnt_cls_cd
+               ,gtt1.xdl_event_type_code
+               ,gtt1.gcc_segment4;
+
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT3, Insert 3:7');
+        WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 3:7 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+    END;
+    FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 3:7 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 3:8 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    -- ------------------------------------------------------------------------------------------------- --
+    -- Block to insert GT3 for XLAJEL--> AP_PREPAY, COGS Query for Prepayment
+    -- ------------------------------------------------------------------------------------------------- --
+    BEGIN
+     INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C_GT3
+            (supplier
+            ,location
+            ,transaction_reference
+            ,description
+            ,account
+            ,amount
+            )
+    SELECT  aps.vendor_name                         SUPPLIER
+           ,gtt1.gcc_segment2                   LOCATION
+           ,gtt1.gjh_doc_seq_value||'-'||
+            gtt1.gjs_source_name  ||'-'||
+            gtt1.gjc_category_name              TRANSACTION_REFERENCE
+           ,NVL(aid.description,ai.description) DESCRIPTION
+           ,gtt1.gcc_segment4                   ACCOUNT
+           ,SUM(gtt1.amount)                     AMOUNT
+           FROM xxfin.xxfin_gbl_gross_margin_c_gt2     gtt1
+           ,ap_prepay_app_dists                  apad
+           ,ap_invoice_distributions_all         aid
+           ,ap_invoices_all                      ai
+           ,ap_suppliers                         aps
+          WHERE gtt1.xdl_src_dist_id_num_1          = apad.prepay_app_dist_id
+        AND gtt1.xdl_src_dist_type              = 'AP_PREPAY'
+        AND apad.prepay_app_distribution_id     = aid.invoice_distribution_id
+        AND aid.invoice_id                      = ai.invoice_id
+        AND aps.vendor_id                       = ai.vendor_id
+       GROUP BY gtt1.gcc_segment2
+           ,aps.vendor_name
+           ,gtt1.gjh_doc_seq_value
+           ,gtt1.gjs_source_name
+           ,gtt1.gjc_category_name
+           ,NVL(aid.description,ai.description)
+           ,gtt1.gcc_segment4;
+
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT3, Insert 3:8');
+        WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 3:8 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+    END;
+    FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 3:8 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+END IF;
+FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT2, Insert 4 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+-- ------------------------------------------------------------------------------------------------- --
+-- Block to insert GT2 for OZFECL
+-- ------------------------------------------------------------------------------------------------- --
+BEGIN
+    COMMIT; --To Delete previous data from GT2
+   INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C_GT2
+   ( gcc_segment2
+    ,gcc_segment4
+    ,gjh_doc_seq_value
+    ,gjs_source_name
+    ,gjc_category_name
+    ,gjl_description
+    ,gjh_je_from_sla_flag
+    ,gir_gl_sl_link_id
+    ,gcc_cd_cmb_id
+    ,gjh_je_category
+    ,amount
+    )
+    SELECT cc.segment2                                     gcc_segment2
+       ,cc.segment4                                        gcc_segment4
+       ,jh.doc_sequence_value                              gjh_doc_seq_value
+       ,js.user_je_source_name                             gjs_source_name
+       ,jc.user_je_category_name                           gjc_category_name
+       ,jl.description                                     gjl_description
+       ,jh.je_from_sla_flag                                gjh_je_from_sla_flag
+       ,gir.gl_sl_link_id                                  gir_gl_sl_link_id
+       ,cc.code_combination_id                             gcc_cd_cmb_id
+       ,jh.je_category                                     gjh_je_category
+       ,NVL(jl.accounted_cr,0)-NVL(jl.accounted_dr,0)      amount
+        FROM apps.gl_je_headers                            jh
+           ,apps.gl_je_lines                               jl
+           ,apps.gl_je_sources                             js
+           ,apps.gl_je_categories                          jc
+           ,apps.gl_code_combinations                      cc
+           ,apps.gl_import_references                      gir
+        WHERE jh.je_header_id                              = jl.je_header_id
+          AND jh.ledger_id                                 = jl.ledger_id
+          AND jl.period_name                               = jh.period_name
+          AND jh.status                                    = 'P'
+          AND jh.je_category                               = jc.je_category_name
+          AND jh.je_source                                 = js.je_source_name
+          AND jh.ledger_id                                 = P_IN_NUM_LEDGER_ID
+          AND jl.period_name                               = P_IN_CHR_PERIOD_NAME
+          AND jl.effective_date                            BETWEEN fnd_date.canonical_to_date(P_DTE_GL_FRM)AND fnd_date.canonical_to_date(P_DTE_GL_TO)
+          AND jl.code_combination_id                       = cc.code_combination_id
+          AND cc.segment4                                  IN (SELECT meaning FROM XXFIN_GBL_GROSS_MARGIN_C_GT5)
+          AND cc.segment1                                  = P_IN_CHR_COMPANY
+          AND jl.je_header_id                              = gir.je_header_id
+          AND jl.je_line_num                               = gir.je_line_num
+   AND gir.gl_sl_link_table                         = 'OZFECL'
+AND NVL(jl.accounted_cr,0) <> NVL(jl.accounted_dr,0) ;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT2, Insert 4');
+    WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT2, Insert 4 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+END;
+FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT2, Insert 4 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+IF P_CHR_EXTRACT = 'N' THEN
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT2, Insert 4:1 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    -- ------------------------------------------------------------------------------------------------- --
+    -- Block to insert GT2 for OZFECL-->Duplicate Entry
+    -- ------------------------------------------------------------------------------------------------- --
+    BEGIN
+      INSERT INTO  xxfin.xxfin_gbl_gross_margin_c_gt3( transaction_reference
+                             ,location
+                             ,description
+                             ,account
+                             ,amount
+                              )
+      (SELECT         gtt1.gjh_doc_seq_value||'-'||
+             gtt1.gjs_source_name  ||'-'||
+             gtt1.gjc_category_name||'- Duplicate GL Entry'    TRANSACTION_REFERENCE
+            ,gtt1.gcc_segment2                                 LOCATION
+            ,DECODE(gtt1.gjs_source_name
+                ,'Manual'
+                   ,gtt1.gjl_description
+                   ,'Spreadsheet'
+                   ,gtt1.gjl_description,NULL)                 DESCRIPTION
+            ,gtt1.gcc_segment4                                 ACCOUNT
+            ,SUM(gtt1.amount)        AMOUNT
+           FROM xxfin.xxfin_gbl_gross_margin_c_gt2 gtt1
+           WHERE gtt1.gjh_je_from_sla_flag    is null
+             AND not exists (SELECT 1
+                       FROM ozf_ae_lines_all oal
+                       ,ozf_funds_utilized_all_b ofu
+                      WHERE oal.source_id                 = ofu.utilization_id
+                    AND oal.source_table              = 'OZF_FUNDS_UTILIZED_ALL_B'
+                    AND oal.gl_sl_link_id             = gtt1.gir_gl_sl_link_id)
+             GROUP BY gtt1.gjh_doc_seq_value
+                 ,gtt1.gjs_source_name
+                 ,gtt1.gjc_category_name
+                 ,gtt1.gcc_segment4
+                 ,gtt1.gcc_segment2
+               ,gtt1.gjl_description);
+
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT3, Insert 4:1');
+        WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 4:1 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+    END;
+    FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 4:1 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+END IF;
+
+FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 4:2 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+-- ------------------------------------------------------------------------------------------------- --
+-- Block to insert GT2 for OZFECL-->OZF_FUNDS_UTILIZED_ALL_B
+-- ------------------------------------------------------------------------------------------------- --
+BEGIN
+INSERT INTO  xxfin.xxfin_gbl_gross_margin_c_gt3(terr_id
+                                           ,location
+                                           ,org_id
+                                           ,order_number
+                                           ,order_line_number
+                                           ,ship_accrual_date
+                                           ,transaction_reference
+                                           ,account
+                                           ,so_line_id                -- Added as per QC#106360
+                                           ,amount)
+(SELECT TERR_ID, LOCATION,ORG_ID,ORDER_NUMBER,ORDER_LINE_NUMBER,SHIP_ACCRUAL_DATE,TRANSACTION_REFERENCE,ACCOUNT,SO_LINE_ID,SUM(AMOUNT) AMOUNT      -- Added SO_LINE_ID as part of QC#106360
+FROM
+(SELECT ooh.attribute1                                       TERR_ID
+              ,gtt1.gcc_segment2                               LOCATION
+              ,ool.org_id                                      ORG_ID
+                 ,ooh.order_number                             ORDER_NUMBER
+                 ,ool.line_number                              ORDER_LINE_NUMBER
+                 ,ool.actual_shipment_date                     SHIP_ACCRUAL_DATE
+                ,gtt1.gjh_doc_seq_value   ||' - '||
+                 gtt1.gjs_source_name  ||' - '||
+                 gtt1.gjc_category_name||' - '||
+                 XXFIN_GBL_GROSS_MARGIN_C_PKG
+                   .get_claim_number(ofu.order_line_id
+                     ,ool.inventory_item_id)                   TRANSACTION_REFERENCE
+                     ,ool.line_id                                  SO_LINE_ID   -- Added as part of QC# 106360
+                 ,gtt1.gcc_segment4                            ACCOUNT
+                  ,gtt1.amount      AMOUNT
+              FROM xxfin.xxfin_gbl_gross_margin_c_gt2        gtt1
+                ,apps.ozf_ae_lines_all                     oal
+                ,apps.ozf_funds_utilized_all_b            ofu
+                ,apps.oe_order_headers_all                ooh
+                ,apps.oe_order_lines_all                  ool
+           WHERE gtt1.gir_gl_sl_link_id      = oal.gl_sl_link_id
+            AND oal.code_combination_id     = gtt1.gcc_cd_cmb_id
+            AND oal.source_id               = ofu.utilization_id
+            AND oal.source_table            = 'OZF_FUNDS_UTILIZED_ALL_B'
+            AND ofu.order_line_id           = ool.line_id
+            AND ool.header_id               = ooh.header_id
+            AND ool.org_id                  = ooh.org_id)
+            GROUP BY TERR_ID
+                   , LOCATION
+                   , ORG_ID
+                   , ORDER_NUMBER
+                   , ORDER_LINE_NUMBER
+                   , SHIP_ACCRUAL_DATE
+                   , TRANSACTION_REFERENCE
+                   , SO_LINE_ID            -- Added as part of QC# 106360
+                   , ACCOUNT);
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT3, Insert 4:2');
+    WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 4:2 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+END;
+FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 4:2 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT2, Insert 5 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+-- ------------------------------------------------------------------------------------------------- --
+-- Block to insert GT2 where GIR.gl_sl_link_id IS NULL for Adjustments, Write Offs and Accrual Post Ship
+-- ------------------------------------------------------------------------------------------------- --
+BEGIN
+    COMMIT; --To Delete previous data from GT2
+ INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C_GT2
+ ( gjl_reference_1
+  ,gjl_reference_2
+  ,gjl_reference_3
+  ,gjl_reference_4
+  ,gjl_reference_5
+  ,gjl_reference_6
+  ,gjl_reference_7
+  ,gjl_reference_8
+  ,gjl_description
+  ,gjh_je_source
+  ,gjh_je_category
+  ,gjh_doc_seq_value
+  ,gjc_category_name
+  ,gjs_source_name
+  ,gcc_segment4
+  ,gcc_segment2
+  ,amount
+ ) SELECT       jl.reference_1                                   gjl_reference_1
+               ,jl.reference_2                                   gjl_reference_2
+               ,jl.reference_3                                   gjl_reference_3
+               ,jl.reference_4                                   gjl_reference_4
+               ,jl.reference_5                                   gjl_reference_5
+               ,jl.reference_6                                   gjl_reference_6
+               ,jl.reference_7                                   gjl_reference_7
+               ,jl.reference_8                                   gjl_reference_8
+               ,jl.description                                   gjl_description
+               ,jh.je_source                                     gjh_je_source
+               ,jh.je_category                                   gjh_je_category
+               ,jh.doc_sequence_value                            gjh_doc_seq_value
+               ,jc.user_je_category_name                         gjc_category_name
+               ,js.user_je_source_name                           gjs_source_name
+               ,cc.segment4                                      gcc_segment4
+               ,cc.segment2                                      gcc_segment2
+               ,sum(NVL(jl.accounted_cr,0) - NVL(jl.accounted_dr,0))  amount
+          FROM apps.gl_je_headers                            jh
+             ,apps.gl_je_lines                               jl
+             ,apps.gl_je_sources                             js
+             ,apps.gl_je_categories                          jc
+             ,apps.gl_code_combinations                      cc
+             ,apps.gl_import_references                      gir
+          WHERE jh.je_header_id                              = jl.je_header_id
+            AND jh.ledger_id                                 = jl.ledger_id
+            AND jl.period_name                               = jh.period_name
+            AND jh.status                                    = 'P'
+            AND jh.je_category                               = jc.je_category_name
+            AND jh.je_source                                 = js.je_source_name
+            AND jh.ledger_id                                 = P_IN_NUM_LEDGER_ID
+            AND jl.period_name                               = P_IN_CHR_PERIOD_NAME
+            AND jl.effective_date                            BETWEEN fnd_date.canonical_to_date(P_DTE_GL_FRM)AND fnd_date.canonical_to_date(P_DTE_GL_TO)
+            AND jl.code_combination_id                       = cc.code_combination_id
+            AND cc.segment4                                  IN (SELECT meaning FROM XXFIN_GBL_GROSS_MARGIN_C_GT5)
+            AND cc.segment1                                  = P_IN_CHR_COMPANY
+            AND jl.je_header_id                              = gir.je_header_id(+)
+            AND jl.je_line_num                               = gir.je_line_num(+)
+            AND gir.gl_sl_link_id                         IS NULL
+ GROUP BY   jl.reference_1
+           ,jl.reference_2
+           ,jl.reference_3
+           ,jl.reference_4
+           ,jl.reference_5
+           ,jl.reference_6
+           ,jl.reference_7
+           ,jl.reference_8
+           ,jl.description
+           ,jh.je_source
+           ,jh.je_category
+           ,jh.doc_sequence_value
+           ,jc.user_je_category_name
+           ,js.user_je_source_name
+           ,cc.segment4
+           ,cc.segment2
+HAVING   SUM(NVL(jl.accounted_cr,0) - NVL(jl.accounted_dr,0)) <> 0;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT2, Insert 5');
+    WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT2, Insert 5 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+END;
+FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT2, Insert 5 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 5:1 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+-- ------------------------------------------------------------------------------------------------- --
+-- Block to insert GT3 for IPV --> JE_CATEGORY = 42
+-- ------------------------------------------------------------------------------------------------- --
+BEGIN
+   INSERT INTO  xxfin.xxfin_gbl_gross_margin_c_gt3(supplier
+                                                  ,terr_id
+                                                  ,location
+                                                   ,org_id
+                                                   ,order_number
+                                                   ,order_line_number
+                                                   ,ship_accrual_date
+                                                   ,transaction_reference
+                                                   ,description
+                                                   ,account
+                                                   ,so_line_id                -- Added as per QC# 106360
+                                                   ,amount)
+ SELECT  aps.vendor_name                                     SUPPLIER
+        ,ooh.attribute1                                       TERR_ID
+         ,gtt1.gcc_segment2                                 LOCATION
+         ,ool.org_id                                        ORG_ID
+         ,ooh.order_number                                  ORDER_NUMBER
+         ,ool.line_number                                   ORDER_LINE_NUMBER
+         ,ool.actual_shipment_date                          SHIP_ACCRUAL_DATE
+         ,gtt1.gjh_doc_seq_value||'-'||
+          gtt1.gjs_source_name  ||'-'||
+          gtt1.gjc_category_name                            TRANSACTION_REFERENCE
+         ,gtt1.gjl_description                              DESCRIPTION
+         ,gtt1.gcc_segment4                                 ACCOUNT
+         ,ool.line_id                                       SO_LINE_ID            -- Added as part of QC#106360
+            ,SUM(gtt1.amount)                               AMOUNT
+        FROM xxfin.xxfin_gbl_gross_margin_c_gt2 gtt1
+            ,mtl_material_transactions        mmt
+            ,oe_order_headers_all             ooh
+            ,oe_order_lines_all               ool
+            ,ap_suppliers                     aps
+            ,ap_supplier_sites_all            apss
+       WHERE gtt1.gjc_category_name        = 'XX IPV Adjustment'
+        AND mmt.transaction_id(+)          = XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(gtt1.gjl_reference_8)
+       AND  mmt.inventory_item_id(+)       = XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(gtt1.gjl_reference_6)
+        AND mmt.trx_source_line_id      = ool.line_id(+)
+        AND ool.header_id               = ooh.header_id(+)
+        AND ool.org_id                  = ooh.org_id(+)
+        AND aps.vendor_id(+)               = apss.vendor_id
+        AND apss.vendor_site_id(+)         = XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(gtt1.gjl_reference_7)
+       GROUP BY ooh.attribute1
+              ,ool.org_id
+              ,ooh.order_number
+              ,ool.line_number
+              ,ool.actual_shipment_date
+              ,gtt1.gjh_doc_seq_value
+              ,gtt1.gjs_source_name
+              ,gtt1.gjc_category_name
+              ,gtt1.gjl_description
+              ,aps.vendor_name
+              ,gtt1.gcc_segment4
+              ,ool.line_id                -- Added as part of QC#106360
+              ,gtt1.gcc_segment2
+        HAVING sum(amount) <> 0;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT3, Insert 5:1');
+    WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 5:1 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+END;
+FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 5:1 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 5:2 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+-- ------------------------------------------------------------------------------------------------- --
+-- Block to insert GT3 for XX Accrual Post Ship, XX I/C Accrual Post Ship, JE_CATEGORY = 62,63
+-- ------------------------------------------------------------------------------------------------- --
+BEGIN
+INSERT INTO  xxfin.xxfin_gbl_gross_margin_c_gt3( supplier
+                                              ,terr_id
+                                              ,location
+                                               ,org_id
+                                               ,order_number
+                                               ,order_line_number
+                                               ,ship_accrual_date
+                                               ,transaction_reference
+                                               ,account
+                                               ,so_line_id                -- Added as per QC#106360
+                                               ,amount)
+SELECT aps.vendor_name                                      SUPPLIER
+      ,ooh.attribute1                                       TERR_ID
+         ,gtt1.gcc_segment2                                 LOCATION
+         ,ool.org_id                                        ORG_ID
+         ,ooh.order_number                                  ORDER_NUMBER
+         ,ool.line_number                                   ORDER_LINE_NUMBER
+         ,ool.actual_shipment_date                          SHIP_ACCRUAL_DATE
+         ,gtt1.gjh_doc_seq_value||'-'||
+          gtt1.gjs_source_name  ||'-'||
+          gtt1.gjc_category_name                            TRANSACTION_REFERENCE
+         ,gtt1.gcc_segment4                                 ACCOUNT
+         ,ool.line_id                                       SO_LINE_ID  -- Added as part of QC#106360
+         ,SUM(gtt1.amount)                                  AMOUNT
+        FROM xxfin.xxfin_gbl_gross_margin_c_gt2 gtt1
+            ,oe_order_headers_all             ooh
+            ,oe_order_lines_all               ool
+            ,ap_suppliers                     aps
+            ,ap_supplier_sites_all            apss
+       WHERE gtt1.gjc_category_name   in ('XX Accrual Post Ship','XX I/C Accrual Post Ship')
+        AND ool.line_id             = XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(gtt1.gjl_reference_4)
+        AND  ool.inventory_item_id  = XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(gtt1.gjl_reference_6)
+        AND aps.vendor_id           = apss.vendor_id
+        AND apss.vendor_site_id     = XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(gtt1.gjl_reference_7)
+        AND ool.header_id           = ooh.header_id
+        AND ool.org_id              = ooh.org_id
+       GROUP BY gjc_category_name
+       ,ooh.attribute1
+              ,ool.org_id
+              ,ooh.order_number
+              ,ool.line_number
+              ,ool.actual_shipment_date
+              ,gtt1.gjh_doc_seq_value
+              ,gtt1.gjs_source_name
+              ,gtt1.gjc_category_name
+              ,aps.vendor_name
+              ,gtt1.gcc_segment4
+              ,ool.line_id             -- Added as part of QC#106360
+              ,gtt1.gcc_segment2
+      HAVING sum(amount) <> 0;
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT3, Insert 5:2');
+    WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 5:2 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+END;
+FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 5:2 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+IF P_CHR_EXTRACT = 'N' THEN
+
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 5:3 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    -- ------------------------------------------------------------------------------------------------- --
+    -- Block to insert GT3 for XXX Claims Write Off , JE_CATEGORY = 202
+    -- ------------------------------------------------------------------------------------------------- --
+    BEGIN
+    INSERT INTO  xxfin.xxfin_gbl_gross_margin_c_gt3( supplier
+                              ,location
+                               ,transaction_reference
+                               ,account
+                               ,amount)
+    SELECT aps.vendor_name                                                              SUPPLIER
+         ,gtt1.gcc_segment2                                                         LOCATION
+         ,gtt1.gjh_doc_seq_value||'-'||
+          gtt1.gjs_source_name  ||'-'||
+          gtt1.gjc_category_name||'-'||oca.claim_number                             TRANSACTION_REFERENCE
+         ,gtt1.gcc_segment4                                                         ACCOUNT
+         ,sum(gtt1.amount)                                                          AMOUNT
+        FROM xxfin.xxfin_gbl_gross_margin_c_gt2     gtt1
+            ,ozf_claim_lines_all                    ocla
+            ,ozf_claims_all                         oca
+            ,ap_suppliers                           aps
+            ,ap_supplier_sites_all                  apss
+           WHERE gtt1.gjc_category_name     = 'XX Claims Write Off'
+        AND ocla.claim_line_id              = XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(gtt1.gjl_reference_5)
+           AND  ocla.item_id                = XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(gtt1.gjl_reference_6)
+           AND ocla.claim_id                = XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(gtt1.gjl_reference_1)
+        AND ocla.org_id                 = oca.org_id
+        AND ocla.claim_id               = oca.claim_id
+        AND aps.vendor_id(+)            = apss.vendor_id
+        AND apss.vendor_site_id(+)      = XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(gtt1.gjl_reference_7)
+    GROUP BY gjc_category_name
+              ,oca.claim_number
+              ,gtt1.gjh_doc_seq_value
+              ,gtt1.gjs_source_name
+              ,gtt1.gjc_category_name
+              ,gtt1.gcc_segment4
+              ,aps.vendor_name
+              ,gtt1.gcc_segment2;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT3, Insert 5:3');
+        WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 5:3 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+    END;
+    FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 5:3 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+END IF;
+
+FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 5:4 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+-- ------------------------------------------------------------------------------------------------- --
+-- Block to insert GT3 for XX Business Cost Update, JE_CATEGORY = 206
+-- ------------------------------------------------------------------------------------------------- --
+BEGIN
+INSERT INTO  xxfin.xxfin_gbl_gross_margin_c_gt3(terr_id
+                                               ,location
+                                               ,org_id
+                                               ,order_number
+                                               ,order_line_number
+                                               ,ship_accrual_date
+                                               ,account
+                                               ,so_line_id                      -- Added as part of QC#106360
+                                               ,amount)
+SELECT ooh.attribute1                                TERR_ID
+       ,gtt1.gcc_segment2                            LOCATION
+       ,ool.org_id                                   ORG_ID
+       ,ooh.order_number                             ORDER_NUMBER
+       ,ool.line_number                              ORDER_LINE_NUMBER
+       ,ool.actual_shipment_date                     SHIP_ACCRUAL_DATE
+       ,gtt1.gcc_segment4                            ACCOUNT
+       ,ool.line_id                                  SO_LINE_ID          -- Added as part of QC#106360
+       ,sum(gtt1.amount)                             AMOUNT
+   FROM xxfin.xxfin_gbl_gross_margin_c_gt2        gtt1
+       ,apps.oe_order_headers_all                ooh
+       ,apps.oe_order_lines_all                  ool
+  WHERE gtt1.gjc_category_name                 IN ('XX Business Cost Update','XX Adder','XX Manual','XX CSP','XX ACP','XX PCBVA Reserve')     --added XX Manual as per QC# 104950  -- Added 'XX CSP' and 'XX ACP' as per QC# 92625  -- Added 'XX PCBVA Reserve' as per QC# 103357
+    AND ool.line_id                          = XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(gtt1.gjl_reference_4)
+    AND ool.header_id                        = ooh.header_id
+    AND ool.org_id                           = ooh.org_id
+GROUP BY  ooh.attribute1
+       ,gtt1.gcc_segment2
+       ,ool.org_id
+       ,ooh.order_number
+       ,ool.line_number
+       ,ool.actual_shipment_date
+       ,gtt1.gcc_segment4
+       ,ool.line_id;              -- Added as part of QC#106360
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT3, Insert 5:4');
+    WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 5:4 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+END;
+FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 5:4 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+IF P_CHR_EXTRACT = 'N' THEN
+
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before inserting GT3, Insert 5:5 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    -- ------------------------------------------------------------------------------------------------- --
+    -- Block to insert GT3 for XX ERV Adjustment, XX Payables Write-Off, XX ERV Write-Off , JE_CATEGORY NOT IN  ('42','62','63','202','206','242') as per APPROD
+    -- ------------------------------------------------------------------------------------------------- --
+    BEGIN
+    INSERT INTO  xxfin.xxfin_gbl_gross_margin_c_gt3( supplier
+                            ,location
+                               ,transaction_reference
+                               ,account
+                               ,amount)
+    SELECT    aps.vendor_name                               SUPPLIER
+         ,gtt1.gcc_segment2                                 LOCATION
+         ,gtt1.gjh_doc_seq_value||'-'||
+          gtt1.gjs_source_name  ||'-'||
+          gtt1.gjc_category_name                            TRANSACTION_REFERENCE
+         ,gtt1.gcc_segment4                                 ACCOUNT
+         ,SUM(gtt1.amount)                                  AMOUNT
+        FROM xxfin.xxfin_gbl_gross_margin_c_gt2 gtt1
+            ,ap_suppliers                       aps
+            ,ap_supplier_sites_all              apss
+        WHERE gtt1.gjc_category_name   not in ('XX Claims Write Off','XX Business Cost Update','XX Adder','XX IPV Adjustment','XX Accrual Post Ship','XX I/C Accrual Post Ship','XX Manual','XX CSP','XX ACP','XX PCBVA Reserve')    --added XX Manual as per QC# 104950  -- Added 'XX CSP' and 'XX ACP' as per QC# 92625  -- Added 'XX PCBVA Reserve' as per QC# 103357
+          AND apss.vendor_site_id(+)     =  XXFIN_GBL_GROSS_MARGIN_C_PKG.is_number(gtt1.gjl_reference_7)
+          AND  aps.vendor_id(+)           = apss.vendor_id
+           GROUP BY aps.vendor_name
+               ,gjc_category_name
+               ,gtt1.gjh_doc_seq_value
+               ,gtt1.gjs_source_name
+               ,gtt1.gjc_category_name
+               ,gtt1.gcc_segment4
+               ,gtt1.gcc_segment2
+               ,gtt1.gjl_reference_7;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'No Data Found While inserting GT3, Insert 5:5');
+        WHEN OTHERS THEN
+        l_errbuf := 'Unexpected error occured while inserting GT3, Insert 5:5 - '||SQLERRM;
+        l_retcode := 2;
+        Raise l_exp;
+    END;
+
+    FND_FILE.PUT_LINE(FND_FILE.log,'After inserting GT3, Insert 5:5 on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+END IF;
+
+COMMIT;
+-- ----------------------------------------------------------- --
+-- Block to fetch no of rows from GT3 table                    --
+-- ----------------------------------------------------------- --
+l_num_count := 0;
+
+BEGIN
+    SELECT count(*)
+    INTO l_num_count
+    FROM XXFIN.XXFIN_GBL_GROSS_MARGIN_C_GT3;
+
+EXCEPTION
+
+    WHEN NO_DATA_FOUND THEN
+
+        l_errbuf := 'No records fetched';
+        FND_FILE.PUT_LINE(FND_FILE.log,l_errbuf);
+        l_retcode := 2;
+        Raise l_exp;
+
+    WHEN OTHERS THEN
+
+        l_errbuf := 'Unexpected Error occured while counitng the records in GT3 table';
+        FND_FILE.PUT_LINE(FND_FILE.log,l_errbuf);
+        l_retcode := 2;
+        Raise l_exp;
+END;
+FND_FILE.PUT_LINE(FND_FILE.log,'Total cound : '||l_num_count);
+-- ----------------------------------------------------------- --
+-- Block to fetch ledger name from ledger id
+-- ----------------------------------------------------------- --
+l_ledger_name := NULL;
+
+BEGIN
+    SELECT name
+       INTO l_ledger_name
+     FROM gl_ledgers
+    WHERE ledger_id = P_IN_NUM_LEDGER_ID;
+EXCEPTION
+    WHEN OTHERS THEN
+        l_errbuf := 'Unexpeted Error occured while fetching ledger name from ledger id:'||SQLERRM;
+        FND_FILE.PUT_LINE(FND_FILE.log,l_errbuf);
+        l_retcode := 2;
+        Raise l_exp;
+END;
+
+IF P_CHR_EXTRACT = 'N' THEN
+
+    -- ---------------------------------------------------- --
+    -- Printing Report name, parameters in the output file.
+    -- ---------------------------------------------------- --
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before printing the report name and Parameter list in output on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+    FND_FILE.PUT_LINE(FND_FILE.output,'||||||UNITY FGL0034C - Gross Margin Report');
+    FND_FILE.PUT_LINE(FND_FILE.output,CHR(9));
+    FND_FILE.PUT_LINE(FND_FILE.output,'Ledger      :|'||l_ledger_name);
+    FND_FILE.PUT_LINE(FND_FILE.output,'Company     :|'||P_IN_CHR_COMPANY);
+    FND_FILE.PUT_LINE(FND_FILE.output,'GL Period   :|'||P_IN_CHR_PERIOD_NAME);
+    FND_FILE.PUT_LINE(FND_FILE.output,'From GL Date:|'||TO_CHAR(fnd_date.canonical_to_date(P_DTE_GL_FRM),'DD-MON-YYYY'));
+    FND_FILE.PUT_LINE(FND_FILE.output,'To GL Date  :|'||TO_CHAR(fnd_date.canonical_to_date(P_DTE_GL_TO),'DD-MON-YYYY'));
+    FND_FILE.PUT_LINE(FND_FILE.output,CHR(9));
+
+    FND_FILE.PUT_LINE(FND_FILE.log,'After printing the report name and Parameter list in output on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+    -- ---------------------------------------------------- --
+    -- Opening the cursor to fetch accounts, its description--
+    --and accountwise GL amount in storting them in a variable.
+    -- ---------------------------------------------------- --
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before opeing cursor c_gl_total to display heading GL TOTAL, REPORT TOTAL and DIFFERENCE in the output heading on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+    FOR rec_gl_total IN c_gl_total(P_IN_NUM_LEDGER_ID
+                  ,P_IN_CHR_PERIOD_NAME
+                  ,P_DTE_GL_FRM
+                  ,P_DTE_GL_TO
+                  ,P_IN_CHR_COMPANY)
+    LOOP
+    IF l_chr_meaning IS NULL THEN
+        l_chr_meaning       := rec_gl_total.meaning;
+        l_chr_description   := rec_gl_total.description;
+        l_chr_gl_amount     := rec_gl_total.gl_amount;
+        l_chr_report_amount := rec_gl_total.report_amount;
+        l_chr_diff_amount   := rec_gl_total.diff_amount;
+
+    ELSE
+        l_chr_meaning       := l_chr_meaning        ||'|'||rec_gl_total.meaning;
+        l_chr_description   := l_chr_description    ||'|'||rec_gl_total.description;
+        l_chr_gl_amount     := l_chr_gl_amount      ||'|'||rec_gl_total.gl_amount;
+        l_chr_report_amount := l_chr_report_amount  ||'|'||rec_gl_total.report_amount;
+        l_chr_diff_amount   := l_chr_diff_amount    ||'|'||rec_gl_total.diff_amount;
+
+    END IF;
+    END LOOP;
+    FND_FILE.PUT_LINE(FND_FILE.log,'After opeing cursor c_gl_total to display heading GL TOTAL, REPORT TOTAL and DIFFERENCE in the output heading on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+    -- --------------------------------------------------- --
+    -- Printing header into output file
+    -- --------------------------------------------------- --
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before printing header in the Output File on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    FND_FILE.PUT_LINE(FND_FILE.OUTPUT,'Selling Operating Unit|Entering Branch|Location|Supplier|Actual Ship Date|Prior Period|Transaction Reference|Description|Sales Order Number|SO Line Number|'||l_chr_meaning||'|Gross Margin|Total Mark-Up|Margin At Business cost|Business Cost|Buy Price Basis|AR Invoice Number|Bill To Customer Number|Bill To Customer Name');
+    FND_FILE.PUT_LINE(FND_FILE.OUTPUT,'||||||||||'||l_chr_description);
+    FND_FILE.PUT_LINE(FND_FILE.log,'After printing header in the Output File on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+END IF;
+-- --------------------------------------------------------------------------------------------- --
+-- Opening the lookup cursor to build dynamic query for where SO exists                          --
+-- --------------------------------------------------------------------------------------------- --
+FND_FILE.PUT_LINE(FND_FILE.log,'Before Opening the cursor to build dynamic query with and without SO details on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+l_sql1 := NULL;
+l_sql2 := NULL;
+
+FOR rec_accnt_lkp_data IN (SELECT meaning,description
+             FROM XXFIN_GBL_GROSS_MARGIN_C_GT5)
+LOOP
+    IF l_sql1 IS NULL THEN
+        l_sql1 := ' INSERT INTO XXFIN_GBL_GROSS_MARGIN_C_GT4
+                 SELECT GTT3.ORG_ID
+                   ,GTT3.TERR_ID
+                   ,GTT3.LOCATION
+                   ,MAX(GTT3.SUPPLIER)
+                   ,GTT3.ORDER_NUMBER
+                   ,GTT3.ORDER_LINE_NUMBER
+                   ,GTT3.SHIP_ACCRUAL_DATE
+                   ,NULL
+                   ,MAX(GTT3.TRANSACTION_REFERENCE)
+                   ,MAX(GTT3.DESCRIPTION)
+                   ,NULL
+                   ,XXFIN_GBL_GROSS_MARGIN_C_PKG
+                                  .GET_BUSINESS_COST('||P_IN_NUM_LEDGER_ID||',RTRIM(RTRIM (XMLAGG (XMLELEMENT (e,GTT3.SO_LINE_ID|| '','')).EXTRACT (''//text()'').getclobval(), '' ''),'','')) BUSINESS_COST
+                   ,SUM(amount)TOTAL_AMOUNT
+                   ,SUM(CASE WHEN gtt5.description like ''MARK UP%'' THEN AMOUNT END) TOTAL_MARKUP
+                   ,SUM(CASE WHEN gtt5.description = ''GROSS SALES SHIPPED'' THEN AMOUNT END) GROSS_SALE_SHIPPED
+                   ,SUM(DECODE('||rec_accnt_lkp_data.meaning||',account,amount,NULL))';
+
+    ELSE
+        l_sql1 := l_sql1||'||''|''||sum(DECODE('||rec_accnt_lkp_data.meaning||',account,amount,NULL))';
+    END IF;
+
+    IF P_CHR_EXTRACT = 'N' THEN
+
+        IF l_sql2 IS NULL THEN
+            l_sql2 := ' INSERT INTO XXFIN_GBL_GROSS_MARGIN_C_GT4
+                     SELECT NULL
+                       ,NULL
+                       ,GTT3.LOCATION
+                       ,GTT3.SUPPLIER
+                       ,NULL
+                       ,NULL
+                       ,NULL
+                       ,NULL
+                       ,GTT3.TRANSACTION_REFERENCE
+                       ,MAX(GTT3.DESCRIPTION)
+                       ,NULL
+                       ,NULL
+                       ,SUM(GTT3.amount)    TOTAL_AMOUNT
+                       ,SUM(CASE WHEN gtt5.description like ''MARK UP%'' THEN GTT3.AMOUNT END) TOTAL_MARKUP
+                       ,SUM(CASE WHEN gtt5.description = ''GROSS SALES SHIPPED'' THEN GTT3.AMOUNT END) GROSS_SALE_SHIPPED
+                       ,SUM(DECODE('||rec_accnt_lkp_data.meaning||',GTT3.ACCOUNT,GTT3.AMOUNT,NULL))';
+        ELSE
+            l_sql2 := l_sql2||'||''|''||sum(DECODE('||rec_accnt_lkp_data.meaning||',GTT3.ACCOUNT,GTT3.AMOUNT,NULL))';
+        END IF;
+    END IF;
+END LOOP;
+    FND_FILE.PUT_LINE(FND_FILE.log,'After Opening the cursor to build dynamic query with SO details on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    -- --------------------------------------------------------------------------------------------- --
+    -- Building full Dynamic query to Insert into GT4
+    -- --------------------------------------------------------------------------------------------- --
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before Building the full dynamic query where SO exists on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    l_sql1 := l_sql1|| ' FROM xxfin_gbl_gross_margin_c_gt3 GTT3
+                             ,XXFIN_GBL_GROSS_margin_c_gt5 gtt5
+                     WHERE so_line_id is not null
+                       AND gtt5.meaning = gtt3.account
+                     GROUP BY GTT3.ORG_ID
+                             ,GTT3.TERR_ID
+                             ,GTT3.LOCATION
+                             ,GTT3.ORDER_NUMBER
+                             ,GTT3.ORDER_LINE_NUMBER
+                             ,GTT3.SHIP_ACCRUAL_DATE ';
+    FND_FILE.PUT_LINE(FND_FILE.log,'After Building the full dynamic query where SO exists on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    FND_FILE.PUT_LINE(FND_FILE.log,'Dynamic Query is :'||l_sql1);
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before calling EXECUTE IMMEDIATE to execute dynamic query with SO on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    EXECUTE IMMEDIATE (l_sql1);
+    COMMIT;
+    FND_FILE.PUT_LINE(FND_FILE.log,'After calling EXECUTE IMMEDIATE to execute dynamic query with SO on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    IF P_CHR_EXTRACT = 'N' THEN
+        FND_FILE.PUT_LINE(FND_FILE.log,'Before Building the full dynamic query where SO does not exist  on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+        l_sql2 := l_sql2|| ' FROM xxfin_gbl_gross_margin_c_gt3 GTT3
+                     ,xxfin_gbl_gross_margin_c_gt5 GTT5
+                WHERE gtt3.so_line_id is null
+                  AND gtt5.meaning = gtt3.account
+                 GROUP BY LOCATION,SUPPLIER,TRANSACTION_REFERENCE ' ;
+
+        FND_FILE.PUT_LINE(FND_FILE.log,'After Building the full dynamic query where SO does not exist on '||TO_char(sysdate,'DD-MON-YYYY HH24:MI:SS'));
+        FND_FILE.PUT_LINE(FND_FILE.log,'Dynamic Query is :'||l_sql2);
+        FND_FILE.PUT_LINE(FND_FILE.log,'Before calling EXECUTE IMMEDIATE to execute dynamic query without SO on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+        EXECUTE IMMEDIATE (l_sql2);
+        COMMIT;
+        FND_FILE.PUT_LINE(FND_FILE.log,'After calling EXECUTE IMMEDIATE to execute dynamic query without SO on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    END IF;
+    -- --------------------------------------------------------------------------------------------- --
+    -- Before opening the cursor to write output file
+    -- --------------------------------------------------------------------------------------------- --
+    FND_FILE.PUT_LINE(FND_FILE.log,'Before opening the cursor to write output file on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+
+    IF P_CHR_EXTRACT = 'N' THEN
+
+        IF P_RPT_ONLY_57 = 'N' THEN
+
+        FOR rec_Data in (SELECT HOU.NAME    SELLING_OPERATING_UNIT
+                               ,GTT4.ORG_ID ORG_ID
+                          ,(SELECT jtr.name
+                              FROM jtf_terr_all jtr
+                                  ,jtf_terr_types_all jtt
+                             WHERE jtr.territory_type_id = jtt.terr_type_id
+                               AND jtt.name              = 'Entering Branch'
+                               AND jtr.terr_id           = gtt4.terr_id)   ENTERING_BRANCH
+                               ,GTT4.LOCATION
+                               ,GTT4.ACTUAL_SHIP_DATE
+                               ,GTT4.TRANSACTION_REFERENCE
+                               ,GTT4.DESCRIPTION
+                               ,GTT4.ORDER_NUMBER
+                               ,GTT4.ORDER_LINE_NUMBER
+                               ,HCA.ACCOUNT_NUMBER  CUSTOMER_NUMBER
+                               ,HP.PARTY_NAME       CUSTOMER_NAME
+                               ,GTT4.AMOUNT_STRUCTURE
+                               ,GTT4.TOTAL_AMOUNT
+                               ,GTT4.TOTAL_MARKUP
+                               ,GTT4.GROSS_SALE_SHIPPED
+                               ,ROUND(GTT4.BUSINESS_COST,2)                                     BUSINESS_COST
+                               ,NVL(SUPPLIER,XXFIN_GBL_GROSS_MARGIN_C_PKG
+                                                .get_supplier_name(gtt4.order_number
+                                                                  ,gtt4.order_line_number
+                                                                  ,gtt4.org_id))                SUPPLIER
+                               ,xxfin_gbl_gross_margin_c_pkg
+                                                .prior_period(P_IN_CHR_PERIOD_NAME
+                                                             ,actual_ship_date)                 PRIOR_PERIOD
+                               ,XXFIN_GBL_GROSS_MARGIN_C_PKG
+                                                .get_buy_price_basis(gtt4.order_number
+                                                                    ,gtt4.order_line_number
+                                                                    ,gtt4.org_id)               BUY_PRICE_BASIS
+                         FROM xxfin.xxfin_gbl_gross_margin_c_gt4    gtt4
+                             ,oe_order_headers_all                  ooh
+                             ,hz_cust_accounts                      hca
+                              ,hr_operating_units                   hou
+                              ,hz_parties                           hp
+                           where gtt4.order_number                  is not null
+                           AND hou.organization_id                  = gtt4.org_id
+                           AND ooh.order_number                     = gtt4.order_number
+                           AND ooh.org_id                           = gtt4.org_id
+                           AND ooh.sold_to_org_id                   = hca.cust_account_id
+                           AND hca.party_id                         = hp.party_id
+                    UNION ALL
+                        SELECT  NULL    SELLING_OPERATING_UNIT
+                               ,NULL    ORG_ID
+                               ,NULL    ENTERING_BRANCH
+                               ,LOCATION
+                               ,ACTUAL_SHIP_DATE
+                               ,TRANSACTION_REFERENCE
+                               ,DESCRIPTION
+                               ,ORDER_NUMBER
+                               ,ORDER_LINE_NUMBER
+                               ,NULL CUSTOMER_NUMBER
+                               ,NULL CUSTOMER_NAME
+                               ,AMOUNT_STRUCTURE
+                               ,TOTAL_AMOUNT
+                               ,TOTAL_MARKUP
+                               ,GROSS_SALE_SHIPPED
+                               ,NULL            BUSINESS_COST
+                               ,SUPPLIER        SUPPLIER
+                               ,NULL            PRIOR_PERIOD
+                               ,NULL            BUY_PRICE_BASIS
+                          FROM xxfin.xxfin_gbl_gross_margin_c_gt4 where order_number is null)
+        LOOP
+
+            -- Fetching Trx number
+            -- ------------------------------------------------------------------- --
+            BEGIN
+
+              l_trx_number := NULL;
+
+              SELECT RTRIM(RTRIM (XMLAGG (XMLELEMENT (e,TRX_NUMBER|| ';')).EXTRACT ('//text()'), ' '),';')
+                INTO l_trx_number
+                                    FROM (SELECT DISTINCT RCT.TRX_NUMBER
+                                    FROM oe_order_lines_all     ool1
+                                    ,oe_order_headers_all       ooh1
+                                    ,ra_customer_trx_all        rct
+                                    ,ra_customer_trx_lines_all  rctl
+                                  WHERE rctl.customer_trx_id        = rct.customer_trx_id
+                                    AND rctl.org_id                 = rct.org_id
+                                    AND to_char(ooh1.order_number)   = rctl.interface_line_attribute1
+                                    AND to_char(ool1.line_id)        = rctl.interface_line_attribute6
+                                    AND ool1.org_id                  = rctl.org_id
+                                    AND ool1.org_id                  = ooh1.org_id
+                                    AND ool1.header_id               = ooh1.header_id
+                                    AND ooh1.order_number            = rec_data.order_number
+                                    AND ool1.line_number             = rec_data.order_line_number
+                                    AND ool1.org_id                  = rec_data.org_id);
+            EXCEPTION
+                WHEN NO_DATA_FOUND THEN
+
+                    l_trx_number := NULL;
+
+                WHEN OTHERS THEN
+
+                    l_errbuf := 'Unexpected Error occured while fetching invoice number the records in GT4 table';
+                    FND_FILE.PUT_LINE(FND_FILE.log,l_errbuf);
+                    l_retcode := 2;
+                    Raise l_exp;
+                END;
+            -- ------------------------------------------------------------------- --
+            -- Calculationg Margin at business cost                                --
+            -- ------------------------------------------------------------------- --
+
+            IF rec_Data.gross_sale_shipped IS NULL THEN
+                l_num_mrg_bus_cost := rec_data.total_amount - NVL(rec_data.total_markup,0);
+            ELSE
+                l_num_mrg_bus_cost := rec_data.total_amount - NVL(rec_data.total_markup,0) + NVL(rec_data.business_cost,0) - NVL(rec_data.gross_sale_shipped,0);
+            END IF;
+            FND_FILE.PUT_LINE(FND_FILE.OUTPUT,rec_data.SELLING_OPERATING_UNIT||'|'||
+                                              rec_data.ENTERING_BRANCH       ||'|'||
+                                              rec_data.LOCATION              ||'|'||
+                                              rec_data.SUPPLIER              ||'|'||
+                                              rec_data.ACTUAL_SHIP_DATE      ||'|'||
+                                              rec_data.PRIOR_PERIOD          ||'|'||
+                                              rec_data.TRANSACTION_REFERENCE ||'|'||
+                                              rec_data.DESCRIPTION           ||'|'||
+                                              rec_data.ORDER_NUMBER          ||'|'||
+                                              rec_data.ORDER_LINE_NUMBER     ||'|'||
+                                              rec_data.AMOUNT_STRUCTURE      ||'|'||
+                                              rec_data.TOTAL_AMOUNT          ||'|'||
+                                              rec_data.TOTAL_MARKUP          ||'|'||
+                                              l_num_mrg_bus_cost             ||'|'||
+                                              rec_data.BUSINESS_COST         ||'|'||
+                                              rec_data.BUY_PRICE_BASIS       ||'|'||
+                                              l_trx_number                   ||'|'||
+                                              rec_data.CUSTOMER_NUMBER       ||'|'||
+                                              rec_data.CUSTOMER_NAME
+                                              );
+        END LOOP;
+    ELSE
+        FOR rec_Data in (SELECT HOU.NAME    SELLING_OPERATING_UNIT
+                          ,(SELECT jtr.name
+                              FROM jtf_terr_all jtr
+                                  ,jtf_terr_types_all jtt
+                             WHERE jtr.territory_type_id = jtt.terr_type_id
+                               AND jtt.name              = 'Entering Branch'
+                               AND jtr.terr_id           = gtt4.terr_id)   ENTERING_BRANCH
+                               ,GTT4.LOCATION
+                               ,GTT4.ACTUAL_SHIP_DATE
+                               ,GTT4.TRANSACTION_REFERENCE
+                               ,GTT4.DESCRIPTION
+                               ,GTT4.ORDER_NUMBER
+                               ,GTT4.ORDER_LINE_NUMBER
+                               ,GTT4.AMOUNT_STRUCTURE
+                               ,NVL(SUPPLIER,XXFIN_GBL_GROSS_MARGIN_C_PKG
+                                        .get_supplier_name(gtt4.order_number
+                                                          ,gtt4.order_line_number
+                                                          ,gtt4.org_id))            SUPPLIER
+                               ,xxfin_gbl_gross_margin_c_pkg
+                                        .prior_period(P_IN_CHR_PERIOD_NAME
+                                                     ,actual_ship_date)             PRIOR_PERIOD
+                               ,XXFIN_GBL_GROSS_MARGIN_C_PKG
+                                                .get_buy_price_basis(gtt4.order_number
+                                                                    ,gtt4.order_line_number
+                                                                    ,gtt4.org_id)               BUY_PRICE_BASIS
+                         FROM xxfin.xxfin_gbl_gross_margin_c_gt4 gtt4
+                              ,hr_operating_units              hou
+                           where gtt4.order_number            is not null
+                           AND hou.organization_id          = gtt4.org_id
+                    UNION ALL
+                        SELECT  NULL    SELLING_OPERATING_UNIT
+                               ,NULL    ENTERING_BRANCH
+                               ,LOCATION
+                               ,ACTUAL_SHIP_DATE
+                               ,TRANSACTION_REFERENCE
+                               ,DESCRIPTION
+                               ,ORDER_NUMBER
+                               ,ORDER_LINE_NUMBER
+                               ,AMOUNT_STRUCTURE
+                               ,SUPPLIER        SUPPLIER
+                               ,NULL            PRIOR_PERIOD
+                               ,NULL            BUY_PRICE_BASIS
+                          FROM xxfin.xxfin_gbl_gross_margin_c_gt4 where order_number is null
+                          )
+        LOOP
+            -- ------------------------------------------------------------------- --
+            -- Calculationg Margin at business cost                                --
+            -- ------------------------------------------------------------------- --
+            FND_FILE.PUT_LINE(FND_FILE.OUTPUT,rec_data.SELLING_OPERATING_UNIT||'|'||
+                                              rec_data.ENTERING_BRANCH       ||'|'||
+                                              rec_data.LOCATION              ||'|'||
+                                              rec_data.SUPPLIER              ||'|'||
+                                              rec_data.ACTUAL_SHIP_DATE      ||'|'||
+                                              rec_data.PRIOR_PERIOD          ||'|'||
+                                              rec_data.TRANSACTION_REFERENCE ||'|'||
+                                              rec_data.DESCRIPTION           ||'|'||
+                                              rec_data.ORDER_NUMBER          ||'|'||
+                                              rec_data.ORDER_LINE_NUMBER     ||'|'||
+                                              rec_data.AMOUNT_STRUCTURE      ||'|'||
+                                              0                              ||'|'||
+                                              0                              ||'|'||
+                                              0                              ||'|'||
+                                              0                              ||'|'||
+                                              rec_data.BUY_PRICE_BASIS);
+        END LOOP;
+    END IF;
+ELSE
+
+
+    IF P_RPT_ONLY_57 = 'N' THEN
+
+        FOR rec_Data in (SELECT HOU.NAME    SELLING_OPERATING_UNIT
+                          ,(SELECT jtr.name
+                              FROM jtf_terr_all jtr
+                                  ,jtf_terr_types_all jtt
+                             WHERE jtr.territory_type_id = jtt.terr_type_id
+                               AND jtt.name              = 'Entering Branch'
+                               AND jtr.terr_id           = gtt4.terr_id)   ENTERING_BRANCH
+                               ,GTT4.LOCATION
+                               ,GTT4.ACTUAL_SHIP_DATE
+                               ,GTT4.TRANSACTION_REFERENCE
+                               ,GTT4.DESCRIPTION
+                               ,GTT4.ORDER_NUMBER
+                               ,GTT4.ORDER_LINE_NUMBER
+                               ,GTT4.AMOUNT_STRUCTURE
+                               ,GTT4.TOTAL_AMOUNT
+                               ,GTT4.TOTAL_MARKUP
+                               ,GTT4.GROSS_SALE_SHIPPED
+                               ,ROUND(GTT4.BUSINESS_COST,2)                                     BUSINESS_COST
+                               ,NVL(SUPPLIER,XXFIN_GBL_GROSS_MARGIN_C_PKG
+                                                .get_supplier_name(gtt4.order_number
+                                                                  ,gtt4.order_line_number
+                                                                  ,gtt4.org_id))                SUPPLIER
+                               ,xxfin_gbl_gross_margin_c_pkg
+                                                .prior_period(P_IN_CHR_PERIOD_NAME
+                                                             ,actual_ship_date)                 PRIOR_PERIOD
+                               ,XXFIN_GBL_GROSS_MARGIN_C_PKG
+                                                .get_buy_price_basis(gtt4.order_number
+                                                                    ,gtt4.order_line_number
+                                                                    ,gtt4.org_id)               BUY_PRICE_BASIS
+                         FROM xxfin.xxfin_gbl_gross_margin_c_gt4 gtt4
+                              ,hr_operating_units              hou
+                           where gtt4.order_number            is not null
+                           AND hou.organization_id          = gtt4.org_id)
+        LOOP
+            -- ------------------------------------------------------------------- --
+            -- Calculationg Margin at business cost                                --
+            -- ------------------------------------------------------------------- --
+            IF rec_Data.gross_sale_shipped IS NULL THEN
+                l_num_mrg_bus_cost := rec_data.total_amount - NVL(rec_data.total_markup,0);
+            ELSE
+                l_num_mrg_bus_cost := rec_data.total_amount - NVL(rec_data.total_markup,0) + NVL(rec_data.business_cost,0) - NVL(rec_data.gross_sale_shipped,0);
+            END IF;
+
+            INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C
+            (LEDGER
+        ,COMPANY
+        ,GL_PERIOD
+        ,SELLING_OPERATING_UNIT
+        ,ENTERING_BRANCH
+        ,LOCATION
+        ,SUPPLIER
+        ,ACTUAL_SHIP_DATE
+        ,PRIOR_PERIOD
+        ,TRANSACTION_REFERENCE
+        ,DESCRIPTION
+        ,SALES_ORDER_NUMBER
+        ,SO_LINE_NUMBER
+        ,ACCOUNT_NAME
+        ,ACCOUNT_AMOUNT
+        ,GROSS_MARGIN
+        ,TOTA_MARK_UP
+        ,MARGIN_AT_BUSINESS_COST
+        ,BUSINESS_COST
+        ,BUY_PRICE_BASIS
+        ,RECORD_TYPE
+        ,REQUEST_ID
+        ,CREATION_DATE
+        ,CREATED_BY
+        ,LAST_UPDATE_DATE
+        ,LAST_UPDATED_BY
+        ,LAST_UPDATE_LOGIN)
+     VALUES (l_ledger_name
+             ,P_IN_CHR_COMPANY
+             ,P_IN_CHR_PERIOD_NAME
+             ,rec_data.SELLING_OPERATING_UNIT
+             ,rec_data.ENTERING_BRANCH
+             ,rec_data.LOCATION
+        ,rec_data.SUPPLIER
+        ,rec_data.ACTUAL_SHIP_DATE
+            ,rec_data.PRIOR_PERIOD
+            ,rec_data.TRANSACTION_REFERENCE
+            ,rec_data.DESCRIPTION
+            ,rec_data.ORDER_NUMBER
+            ,rec_data.ORDER_LINE_NUMBER
+            ,NULL
+            ,NULL
+            ,rec_data.TOTAL_AMOUNT
+            ,rec_data.TOTAL_MARKUP
+            ,l_num_mrg_bus_cost
+            ,rec_data.BUSINESS_COST
+            ,rec_data.BUY_PRICE_BASIS
+            ,'FORMULA'
+            ,g_num_req_id
+            ,SYSDATE
+            ,g_num_user_id
+            ,SYSDATE
+            ,g_num_user_id
+            ,g_num_login_id);
+
+        END LOOP;
+    ELSE
+        FOR rec_Data in (SELECT HOU.NAME    SELLING_OPERATING_UNIT
+                          ,(SELECT jtr.name
+                              FROM jtf_terr_all jtr
+                                  ,jtf_terr_types_all jtt
+                             WHERE jtr.territory_type_id = jtt.terr_type_id
+                               AND jtt.name              = 'Entering Branch'
+                               AND jtr.terr_id           = gtt4.terr_id)   ENTERING_BRANCH
+                               ,GTT4.LOCATION
+                               ,GTT4.ACTUAL_SHIP_DATE
+                               ,GTT4.TRANSACTION_REFERENCE
+                               ,GTT4.DESCRIPTION
+                               ,GTT4.ORDER_NUMBER
+                               ,GTT4.ORDER_LINE_NUMBER
+                               ,GTT4.AMOUNT_STRUCTURE
+                               ,NVL(SUPPLIER,XXFIN_GBL_GROSS_MARGIN_C_PKG
+                                        .get_supplier_name(gtt4.order_number
+                                                          ,gtt4.order_line_number
+                                                          ,gtt4.org_id))            SUPPLIER
+                               ,xxfin_gbl_gross_margin_c_pkg
+                                        .prior_period(P_IN_CHR_PERIOD_NAME
+                                                     ,actual_ship_date)             PRIOR_PERIOD
+                               ,XXFIN_GBL_GROSS_MARGIN_C_PKG
+                                                .get_buy_price_basis(gtt4.order_number
+                                                                    ,gtt4.order_line_number
+                                                                    ,gtt4.org_id)               BUY_PRICE_BASIS
+                         FROM xxfin.xxfin_gbl_gross_margin_c_gt4 gtt4
+                              ,hr_operating_units              hou
+                           where gtt4.order_number            is not null
+                           AND hou.organization_id          = gtt4.org_id)
+        LOOP
+
+            INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C
+            (LEDGER
+        ,COMPANY
+        ,GL_PERIOD
+        ,SELLING_OPERATING_UNIT
+        ,ENTERING_BRANCH
+        ,LOCATION
+        ,SUPPLIER
+        ,ACTUAL_SHIP_DATE
+        ,PRIOR_PERIOD
+        ,TRANSACTION_REFERENCE
+        ,DESCRIPTION
+        ,SALES_ORDER_NUMBER
+        ,SO_LINE_NUMBER
+        ,ACCOUNT_NAME
+        ,ACCOUNT_AMOUNT
+        ,GROSS_MARGIN
+        ,TOTA_MARK_UP
+        ,MARGIN_AT_BUSINESS_COST
+        ,BUSINESS_COST
+        ,BUY_PRICE_BASIS
+        ,RECORD_TYPE
+        ,REQUEST_ID
+        ,CREATION_DATE
+        ,CREATED_BY
+        ,LAST_UPDATE_DATE
+        ,LAST_UPDATED_BY
+        ,LAST_UPDATE_LOGIN)
+     VALUES (l_ledger_name
+             ,P_IN_CHR_COMPANY
+             ,P_IN_CHR_PERIOD_NAME
+             ,rec_data.SELLING_OPERATING_UNIT
+             ,rec_data.ENTERING_BRANCH
+             ,rec_data.LOCATION
+        ,rec_data.SUPPLIER
+        ,rec_data.ACTUAL_SHIP_DATE
+            ,rec_data.PRIOR_PERIOD
+            ,rec_data.TRANSACTION_REFERENCE
+            ,rec_data.DESCRIPTION
+            ,rec_data.ORDER_NUMBER
+            ,rec_data.ORDER_LINE_NUMBER
+            ,NULL
+            ,NULL
+            ,0
+            ,0
+            ,0
+            ,0
+            ,rec_data.BUY_PRICE_BASIS
+            ,'FORMULA'
+            ,g_num_req_id
+            ,SYSDATE
+            ,g_num_user_id
+            ,SYSDATE
+            ,g_num_user_id
+            ,g_num_login_id);
+END LOOP;
+END IF;
+END IF;
+
+IF P_CHR_EXTRACT = 'Y' THEN
+
+INSERT INTO XXFIN.XXFIN_GBL_GROSS_MARGIN_C
+    (SELECT l_ledger_name
+           ,P_IN_CHR_COMPANY
+           ,P_IN_CHR_PERIOD_NAME
+           ,tbl.SELLING_OPERATING_UNIT
+           ,tbl.ENTERING_BRANCH
+           ,tbl.LOCATION
+           ,tbl.SUPPLIER
+           ,tbl.ACTUAL_SHIP_DATE
+           ,tbl.PRIOR_PERIOD
+           ,tbl.TRANSACTION_REFERENCE
+           ,tbl.DESCRIPTION
+           ,tbl.SALES_ORDER_NUMBER
+           ,tbl.SO_LINE_NUMBER
+           ,GTT4.ACCOUNT
+           ,GTT4.AMOUNT
+           ,NULL
+           ,NULL
+           ,NULL--tbl.BUSINESS_COST
+           ,NULL
+           ,NULL--tbl.BUY_PRICE_BASIS
+        ,'ACCOUNT'
+        ,g_num_req_id
+        ,SYSDATE
+        ,g_num_user_id
+        ,SYSDATE
+        ,g_num_user_id
+        ,g_num_login_id
+     FROM (select  order_number,order_line_number,account,sum(amount) amount
+from xxfin.XXFIN_GBL_GROSS_MARGIN_C_GT3
+group by order_number,order_line_number,account) gtt4
+         ,XXFIN.XXFIN_GBL_GROSS_MARGIN_C tbl
+       where gtt4.order_number     = tbl.sales_order_number
+         and gtt4.order_line_number = tbl.so_line_number
+         and tbl.record_type     = 'FORMULA'
+         and tbl.request_id     = g_num_req_id);
+ELSE
+    -- --------------------------------------------------------------------------------------------- --
+    -- After opening the cursor for final table GT4 with sales order details
+    -- --------------------------------------------------------------------------------------------- --
+    FND_FILE.PUT_LINE(FND_FILE.log,'After opening the cursor to write output without SO details on '||TO_char (sysdate,'DD-MON-YYYY HH24:MI:SS'));
+    FND_FILE.PUT_LINE(FND_FILE.OUTPUT,'|||||||||REPORT TOTAL|'||l_chr_report_amount);
+    FND_FILE.PUT_LINE(FND_FILE.OUTPUT,'|||||||||GL TOTAL|'||l_chr_gl_amount);
+    FND_FILE.PUT_LINE(FND_FILE.OUTPUT,'|||||||||DIFFERENCE|'||l_chr_diff_amount);
+END IF;
+COMMIT;
+EXCEPTION
+    WHEN no_row_exp THEN
+   P_OUT_CHR_ERRBUF := ' No Data Found';
+
+   FND_FILE.PUT_LINE(FND_FILE.output,CHR(9));
+    FND_FILE.PUT_LINE(FND_FILE.output,'Ledger      :|'||l_ledger_name);
+    FND_FILE.PUT_LINE(FND_FILE.output,'Company     :|'||P_IN_CHR_COMPANY);
+    FND_FILE.PUT_LINE(FND_FILE.output,'GL Period   :|'||P_IN_CHR_PERIOD_NAME);
+    FND_FILE.PUT_LINE(FND_FILE.output,'From GL Date:|'||TO_CHAR(fnd_date.canonical_to_date(P_DTE_GL_FRM),'DD-MON-YYYY'));
+    FND_FILE.PUT_LINE(FND_FILE.output,'To GL Date  :|'||TO_CHAR(fnd_date.canonical_to_date(P_DTE_GL_TO),'DD-MON-YYYY'));
+    FND_FILE.PUT_LINE(FND_FILE.output,CHR(9));
+    FND_FILE.PUT_LINE(FND_FILE.output,CHR(9));
+    FND_FILE.PUT_LINE(FND_FILE.output,CHR(9));
+    FND_FILE.PUT_LINE(FND_FILE.output,CHR(9));
+    FND_FILE.PUT_LINE(FND_FILE.OUTPUT,'|||| No Data Found');
+    P_OUT_NUM_RETCODE := 0;
+
+WHEN l_exp THEN
+
+    P_OUT_CHR_ERRBUF := l_errbuf;
+    P_OUT_NUM_RETCODE := l_retcode;
+
+WHEN OTHERS THEN
+    P_OUT_CHR_ERRBUF := 'In Final Exception :'||SQLERRM;
+    P_OUT_NUM_RETCODE := 2;
+END MAIN;
+END XXFIN_GBL_GROSS_MARGIN_C_PKG;
+/
