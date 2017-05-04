@@ -1,0 +1,247 @@
+   21  git add edu2.txt
+   22  git commit -m "making changes in firstbranch"
+   24  git checkout master
+   27  git merge firstbranch
+   30  git checkout firstbranch
+   31  git commit -a -m "modifying edu2"
+   33  git checkout master
+   35  git merge firstbranch
+   38  git checkout firstbranch
+   39  git add -A
+   40  git commit -a -m "adding for rebaing"
+   42  git checkout master
+   44  git checkout firstbranch
+   46  git rebase master
+   47  git checkout master
+   48  git rebase firstbranch
+   59  ssh -T git@github.com
+   65  ssh -T git@github.com
+   66  ssh -vT git@github.com
+   68  git log
+   70  git checkout firstbranch
+   73  git checkout master
+   74  git checkout 6e87998b edu2.txt
+   76  git checkout firstbranch
+   78  git checkout 6e87998b edu2.txt
+   80  git log
+   81  git status
+   82  git add edu5.txt
+   83  git status
+   84  git commit edu5.txt
+   85  git commit -m "edu5"
+   87  git commit -m "modify edu5"
+   88  git commit edu5.txt -m "modify edu5"
+   90  git log 
+   91  git checkout 501cfb32 edu5.txt
+   93  git checkout master
+   94  git checkout 501cfb32 edu5.txt
+   98  git log 
+   99  git commit -a -m "hello there"
+  101  git commit -a -m "hello"
+  103  git log 
+  104  git checkout 10748a0c edu5.txt
+  108  git log 
+  109  git checkout  8974982d edu5.txt
+  121  ssh -T git@github.com
+  122  ssh -vT git@github.com
+  124  ssh -T git@github.com
+  128  git remote -v
+  129  ssh -T git@github.git
+  130  vi .git/config
+  131  vi .git/config
+  132  vi .git/config
+  133  vi .git/config
+  134  vi .git/config
+  135  vi .git/config
+  136  ssh -T git@github.git
+  137  vi .git/config
+  138  ssh -T git@github.git
+  139  ssh -T git@github.com
+  155  git config --global user.name "puneethprog9"
+  156  git config --global user.email puneethreddyb@gmail.com
+  157  git clone git@github.com:puneethprog9/designerschoice.git
+  158  git clone https://github.com/puneethprog9/designerschoice.git
+  159  git add add.txt
+  162  git add add.txt
+  163  git add status
+  164  git status
+  165  git commit -m "first"
+  166  git push -u origin master
+  172  git push -u orgin master
+  173  git status
+  183  git clone https://github.com/dxd132630/Shell.git
+  184  git init
+  185  git remote add origin "git@github.com:puneethprog9/git-github" 
+  187  git pull origin master
+  188  git remote add origin "https://github.com/puneethprog9/git-github" 
+  189  git pull origin master
+  190  git pull origin master
+  191  git remote add origin "https://github.com/puneethprog9/shellscripts"
+  192  git pull origin master 
+  209  git push origin master
+  210  git pull origin master
+  213  sudo git pull origin master
+  214  ssh -vT git@github.com
+  221  git config --global user.name "puneethprog9"
+  222  git config --global email.name "puneethreddyb@gmail.com"
+  226  ssh -T git@github.com
+  228  ssh -T git@github.com
+  230  git config --list
+  231   git pull origin master
+  248  git config --global user.name "puneethprog9"
+  249  git config --global user.email "puneethreddyb@gmail.com"
+  250  git cline https://github.com/puneethprog9/git-github
+  251  git clone https://github.com/puneethprog9/git-github
+  253  cd git-github/
+  258  git add test.txt 
+  259  git status
+  260  git commit -m "test file" test.txt 
+  261  git status
+  262  git push -u origin master
+  264  git status
+  265  git add serverpull.txt 
+  266  git status
+  267  git commit -m "serverpull" serverpull.txt 
+  268  git push -u origin master
+  270  git pull origin master
+  272  git log
+  274  git branch firstbranch
+  276  git checkout firstbranch 
+  278  git add  Firstbranch.txt 
+  279  git commit -m "making changes in firstbranch" Firstbranch.txt 
+  281  git checkout master
+  283  git merge firstbranch 
+  285  git log 
+  286  man git
+  288  git log 
+  289  git status
+  290  git commit -m "change in test file" test.txt 
+  293  git log 
+  294  git 
+  295  git reset 
+  296  git log
+  297  git help -a
+  298  git help reset 
+  299  git help revert
+  301  git log
+  302  git checkout 11c0cf2fe63cfcdb532303650e9dd19a46b50cc0 --text.txt
+  304  git log  --oneline
+  305  git checkout 11c0cf2 test.txt
+  307  git checkout 11c0cf2 
+  308  git log  --oneline
+  310  git checkout fc15d73
+  311  git pull -A
+  312  git pull -a
+  315  git checkout master
+  319  git log oneline
+  320  git log -oneline
+  321  git log --oneline
+  322  git checkout 11c0cf2 test.txt
+  326  git log --oneline
+  327  git checkout fc15d73 test.txt
+  330  git log 
+  331  git revert 11c0cf2fe63cfcdb532303650e9dd19a46b50cc0
+  332  git commit -a
+  341  git clone "https://github.com/puneethprog9/CloudFormation.git"
+  349  git status
+  350  git add hello.txt 
+  352  git status
+  353  git commit -m "Read me" hello.txt 
+  354  git status
+  355  git push origin master
+  356  git push origin master
+  358  git add -A
+  359  git commit -m "Instance with security group" Instance&securitygroup.template
+  360  git commit -m "Instance with security group" Instance&securitygroup.template
+  361  git commit -m "Instance with security group" 'Instance&securitygroup.template'
+  362  git commit -m "Instance with security group" InstanceWithLoadBalancer.template 
+  363  git push origin master
+  366  cd git-github/
+  368  git status
+  369  git merge firstbranch 
+  370  git commit -A
+  371  git commit -a
+  372  git status
+  373  git merge master
+  374  git rebasing master
+  375  git rebase master
+  378  git commit -m "file text" test.txt 
+  379  git push
+  381  git log
+  382  git push -f origin 90f95c8c435e4eb85071efd95cac67634fcfb14b
+  383  git push -f origin 11c0cf2fe63cfcdb532303650e9dd19a46b50cc0
+  384  git checkout firstbranch 
+  385  git push -f origin 11c0cf2fe63cfcdb532303650e9dd19a46b50cc0
+  386  git push -f origin 90f95c8c435e4eb85071efd95cac67634fcfb14b
+  387  git push -f origin 11c0cf2fe63cfcdb532303650e9dd19a46b50cc0:Firstbranch
+  388  git push -f origin 11c0cf2fe63cfcdb532303650e9dd19a46b50cc0:firstbranch
+  389  git checkout master
+  391  git status
+  393  git status
+  394  git commit -m "reverting"
+  395  git checkout firstbranch 
+  399  git checkout master 
+  400  git checkout firstbranch 
+  401  git log 
+  402  git log --oneline
+  403  git checkout b025b94
+  406  git commit -a
+  408  git merge master 
+  410  git checkout master 
+  412  git commit -A
+  413  git commit -aa
+  414  git commit -a
+  415  git checkout firstbranch 
+  416  git commit -a
+  418  git checkout master
+  423  git add -a
+  424  git add -A
+  425  git status
+  427  git commit -m "LB Single Instance" perfectloadbalancer.template 
+  428  git commit -m "LB two Instance" LoadBalancerWithTwoInstances.template 
+  429  git  push origin master
+  430  git clone https://github.com/puneethprog9/Python.git
+  436  git clone https://github.com/puneethprog9/AwsCli.git
+  441  git status
+  442  git add AwsCliConfiguration.txt 
+  443  git commit -m "COnfiguration file of aws cli " AwsCliConfiguration.txt 
+  445  git push AwsCliConfiguration.txt
+  446  git push -A AwsCliConfiguration.txt
+  447  git push origin master
+  459  git clone https://github.com/puneethprog9/Configurations.git
+  466  git add -A DUmmy.txt 
+  467  git commit -m "Ssh Based" DUmmy.txt 
+  468  git push origin master 
+  471  git fetch upstream
+  472  git fetch master
+  474  git rm DUmmy.txt 
+  475  git commit -m "Remove Dummy File"
+  476  git push origin master
+  477  git add -A
+  478  git status
+  479  git commit -m "file for aws cli" file1 file2
+  480  git commit -m "using file to stop instance" run_stopped_ec2.sh 
+  481  git commit -m "stop instance " run_stop
+  482  git commit -m "stop instance " run_stop
+  483  git commit -m "stop instance " run_stop.sh 
+  484  git commit -m "status of instance using instance id" State_check.sh 
+  485  git commit -m "toady cli commands" today_cli 
+  486  git push origin master
+  491  git checkout firstbranch
+  495  git checkout master
+  497  git checkout firstbranch 
+  501  git checkout master
+  503  git checkout firstbranch 
+  505  git status
+  506  git add .
+  507  git status
+  508  git commit -m "firstbranch thing" puneeth 
+  509  git push origin master firstbranch 
+  510  git checkout master 
+  511  git merge firstbranch 
+  513  git push origin master
+  514  git  branch -d firstbranch 
+  515  git push origin --delete
+  516  git push origin --delete firstbranch
+  519  history | grep git
+  520  history | grep git >>git_today.txt
