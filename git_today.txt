@@ -245,3 +245,4 @@
   516  git push origin --delete firstbranch
   519  history | grep git
   520  history | grep git >>git_today.txt
+update for git stash
